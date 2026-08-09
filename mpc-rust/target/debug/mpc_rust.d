@@ -1,0 +1,1 @@
+/home/kawata/rust/projects/mpc_group_purchasing/mpc-rust/target/debug/mpc_rust: /home/kawata/rust/projects/mpc_group_purchasing/mpc-rust/src/main.rs /home/kawata/rust/projects/mpc_group_purchasing/mpc-rust/src/secret_sharing.rs
