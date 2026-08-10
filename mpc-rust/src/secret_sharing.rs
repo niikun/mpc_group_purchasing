@@ -5,14 +5,14 @@
 //   r3 = (v - r1 - r2) mod M
 //   (r1 + r2 + r3) mod M == v が常に成立する
 
-use rand::Rng;
+use rand::RngExt;
 use std::ops::{Add, Sub, Mul};
 
 /// 法M。実際に扱う需要合計・供給合計の最大値より十分大きい値にする。
 pub const M: u64 = (1u64 << 31) - 1; // 2^31 - 1 (メルセンヌ素数)
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Fp{
+pub struct Fp{
     value:u64,
 }
     
@@ -83,11 +83,10 @@ impl Fp {
             _ => Some(self.pow(M - 2)),
         }
     }
-    
 }
 
 
-pub type Share = u64;
+pub type Share = Fp;
 
 /// 値 v を3つのシェアに分割する。
 ///
@@ -100,8 +99,16 @@ pub type Share = u64;
 /// v, r1, r2 はすべて [0, M) の範囲にあることを踏まえて、
 /// 「M表現内での引き算」をどう安全に行うか考えること。
 /// (i128 に一度持ち上げる / M を足してからmodを取る、などいくつかやり方がある)
-pub fn split_into_shares(v: u64) -> [Share; 3] {
-    todo!("v を3シェアに分割する")
+pub fn split_into_shares(v:Fp) -> [Share; 3] {
+    let mut rng = rand::rng();
+    let r1 = Fp::new(rng.random_range(0..M));
+    let r2 = Fp::new(rng.random_range(0..M));
+    let r3 = v - r1 - r2;
+    [r1,r2,r3]
+}
+
+pub fn reconstruct(shares:&[Fp;3]) -> Fp {
+    shares[0] + shares[1] + shares[2]
 }
 
 #[cfg(test)]
@@ -110,9 +117,9 @@ mod tests {
 
     #[test]
     fn shares_sum_to_original_value_mod_m() {
-        let v = 350u64;
+        let v = Fp::new(350u64);
         let shares = split_into_shares(v);
-        let sum: u64 = ((shares[0] as u128 + shares[1] as u128 + shares[2] as u128) % M as u128) as u64;
+        let sum: Fp = shares[0]  + shares[1] + shares[2] ;
         assert_eq!(sum, v);
     }
 
@@ -141,4 +148,14 @@ mod tests {
         let inv_a = a.inverse().unwrap();
         assert_eq!((a * inv_a).value(), 1); 
     }
+
+    #[test]
+    fn test_reconstruct(){
+        let v = Fp::new(24);
+        let shares = split_into_shares(v);
+        let reconstructed = reconstruct(&shares);
+        assert_eq!(v, reconstructed);
+    }
+
+
 }
