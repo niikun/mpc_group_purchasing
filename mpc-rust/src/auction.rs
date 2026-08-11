@@ -20,14 +20,18 @@ impl Quantity {
     fn to_quantities(&self) -> [u64; 9] {
         self.quantity.map(|bit:Fp| bit.value())
     }
-}
 
-pub fn quantities_share(quantities:Quantity)->[[Fp;3];9]{
-    let quantities_shares = quantities.quantity.map(|q:Fp| split_into_shares(q));
+    pub fn quantities_share(&self:Quantity)->[[Fp;3];9]{
+    let quantities_shares = self.quantity.map(|q:Fp| split_into_shares(q));
     quantities_shares
+    }
 }
 
 
+
+struct Seller {
+
+}
 
 #[cfg(test)]
 mod tests{
