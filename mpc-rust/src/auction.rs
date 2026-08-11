@@ -41,21 +41,54 @@ impl PriceQuantity {
     }
 }
 
-// struct Sellers {
-//     // 各価格での希望販売数量を保持。デモでは2社
-//     seller:[PriceQuantity;2]
-// }
+pub enum Branch {
+    Seller,
+    Buyer
+}
 
-// struct Buyers {
-//     // 各価格での希望購入数量を保持
-//     buyer:[Quantity;3]
-// }
+#[derive(Debug, Clone,)]
+pub struct Node{
+    seller_quantities:[Fp;9],
+    buyer_quantities:[Fp;9]
+}
 
-// struct Trades {
-//     // 取引の価格と取引の量
-//     price:u64,
-//     trade:u64
-// }
+impl Node {
+    pub fn new()->Node{
+        Node{
+            seller_quantities:[Fp::zero();9],
+            buyer_quantities:[Fp::zero();9]
+        }
+    } 
+    pub fn add_share(&self,share:[Fp;9],branch:Branch)->Node{
+        match branch {
+            Branch::Buyer =>{
+                let current_buyer = self.buyer_quantities;
+                let current_seller = self.seller_quantities;
+                let mut result = [Fp::zero();9];
+                for (i, (c, s)) in current_buyer.iter().zip(share.iter()).enumerate(){
+                    result[i] = *c + *s;
+                }
+                Node {
+                    buyer_quantities:result,
+                    seller_quantities:current_seller
+                }
+            }
+            Branch::Seller => {
+                let current_buyer = self.buyer_quantities;
+                let current_seller = self.seller_quantities;
+                let mut result = [Fp::zero();9];
+                for (i, (c, s)) in current_seller.iter().zip(share.iter()).enumerate(){
+                    result[i] = *c + *s;
+                }
+                Node {
+                    buyer_quantities:current_buyer,
+                    seller_quantities:result
+                }
+            }
+        }
+    }
+}
+
 
 // pub fn make_trade(buyers:Buyers, sellers:Sellers){
 
