@@ -11,7 +11,7 @@ use std::ops::{Add, Sub, Mul};
 /// 法M。実際に扱う需要合計・供給合計の最大値より十分大きい値にする。
 pub const M: u64 = (1u64 << 31) - 1; // 2^31 - 1 (メルセンヌ素数)
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq,PartialOrd)]
 pub struct Fp{
     value:u64,
 }
@@ -84,7 +84,6 @@ impl Fp {
         }
     }
 }
-
 
 pub type Share = Fp;
 

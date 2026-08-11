@@ -1,18 +1,19 @@
-use crate::secret_sharing::{Fp, Share, split_into_shares, reconstruct};
+use crate::secret_sharing::{Fp, Share, split_into_shares};
+use crate::node::{Node, Branch};
 
-const PRICES: [u64; 9] = [95,100,105,110,115,120,125,130,135];
+pub const PRICES: [u64; 9] = [95,100,105,110,115,120,125,130,135];
 
 #[derive(PartialEq, Eq,Debug,Clone, Copy)]
-struct PriceQuantity{
+pub struct PriceQuantity{
     quantities:[Fp;9]
 }
 
 impl PriceQuantity {
-    fn new(values: [Fp; 9]) -> Self {
+    pub fn new(values: [Fp; 9]) -> Self {
         PriceQuantity { quantities:values }
     }
 
-    fn from_quantities(values: &[u64; 9]) -> Self {
+    pub fn from_quantities(values: &[u64; 9]) -> Self {
         let quantities:[Fp;9] = values.map(|v| Fp::new(v));
         PriceQuantity::new(quantities)
     }
@@ -41,65 +42,16 @@ impl PriceQuantity {
     }
 }
 
-pub enum Branch {
-    Seller,
-    Buyer
-}
-
-#[derive(Debug, Clone,PartialEq)]
-pub struct Node{
-    seller_quantities:[Fp;9],
-    buyer_quantities:[Fp;9]
-}
-
-
-impl Node {
-    pub fn new()->Node{
-        Node{
-            seller_quantities:[Fp::zero();9],
-            buyer_quantities:[Fp::zero();9]
+fn clearing_price(demand:PriceQuantity, supply:PriceQuantity)->Option<(u64,u64)>{
+    for ((d,s),p) in demand.quantities.iter().zip(supply.quantities.iter()).zip(PRICES.iter()){
+        if d <= s{
+            return Some((*p, d.value()));
         }
-    } 
-pub fn add_share(&self,share:[Fp;9],branch:Branch)->Node{
-    match branch {
-        Branch::Seller => {
-            let mut updates = self.seller_quantities;
-            updates = update_share(updates,share);
-            Node{buyer_quantities:self.buyer_quantities,
-                seller_quantities:updates    
-            }
-        },
-        Branch::Buyer => {
-            let mut updates = self.buyer_quantities;
-            updates = update_share(updates,share);
-            Node{seller_quantities:self.seller_quantities,
-                buyer_quantities:updates    
-            }
-        }
-    }
+    }    None
 }
-
-pub fn add_node(node_1:Node,node_2:Node,node_3:Node)->Node{
-    let mut results:Node = node_1.clone();
-    let node_2_buyer:[Fp;9] = node_2.buyer_quantities;
-    let node_3_buyer:[Fp;9] = node_3.buyer_quantities;
-    let node_2_seller:[Fp;9] = node_2.seller_quantities;
-    let node_3_seller:[Fp;9] = node_3.seller_quantities;
-    results = results.add_share(node_2_buyer,Branch::Buyer);
-    results = results.add_share(node_3_buyer,Branch::Buyer);
-    results = results.add_share(node_2_seller,Branch::Seller);
-    results = results.add_share(node_3_seller,Branch::Seller);
-    results
+pub fn allocate(desired: u64, total: u64, traded: u64) -> u64 {
+    traded * desired / total 
 }
-}
-pub fn update_share(updates:[Fp;9],share:[Fp;9])->[Fp;9]{
-    let mut results = [Fp::zero();9];
-    for (i, (u, s)) in updates.iter().zip(share.iter()).enumerate(){
-        results[i] = *u + *s;
-    }
-    results
-}
-
 
 #[cfg(test)]
 mod tests{
@@ -130,57 +82,30 @@ mod tests{
         let new_q = PriceQuantity::quantities_join(&share_1, &share_2, &share_3);
         assert_eq!(q, new_q);
     }
-
     #[test]
-    fn test_add_share(){
-        let mut node1 = Node::new();
-        let mut node2 = Node::new();
-        let q1 = [Fp::new(10);9];
-        let q2 = [Fp::new(20);9];
-        node1 = node1.add_share(q1,Branch::Buyer);
-        node1 = node1.add_share(q1,Branch::Buyer);
-        node2 = node2.add_share(q2,Branch::Buyer);
-
-        assert_eq!(node1,node2);
-
-        node1 = node1.add_share(q1,Branch::Seller);
-        node1 = node1.add_share(q1,Branch::Seller);
-        node2 = node2.add_share(q2,Branch::Seller);
-
-        assert_eq!(node1,node2);
-    }
-    #[test]
-    fn test_add_node(){
-        let mut node1 = Node::new();
-        let mut node2 = Node::new();  
-        let mut node3 = Node::new();      
-        let mut node4 = Node::new();    
-        let mut node5 = Node::new();    
-
-        let q1 = [Fp::new(10);9];
-        let q2 = [Fp::new(20);9];
-        node1 = node1.add_share(q1,Branch::Buyer);
-        node2 = node2.add_share(q1,Branch::Buyer);
-        node3 = node3.add_share(q2,Branch::Buyer);
-        node5 = Node::add_node(node1.clone(),node2.clone(),node3.clone());
-
-        node4 = node4.add_share(q1,Branch::Buyer);
-        node4 = node4.add_share(q1,Branch::Buyer);
-        node4 = node4.add_share(q2,Branch::Buyer);
-
-        assert_eq!(node4, node5);
-
-        node1 = node1.add_share(q1,Branch::Seller);
-        node2 = node2.add_share(q1,Branch::Seller);
-        node3 = node3.add_share(q2,Branch::Seller);
-        node5 = Node::add_node(node1.clone(),node2.clone(),node3.clone());
-
-        node4 = node4.add_share(q1,Branch::Seller);
-        node4 = node4.add_share(q1,Branch::Seller);
-        node4 = node4.add_share(q2,Branch::Seller);
-        assert_eq!(node4, node5);
-
+    fn test_clearing_price(){
+        let dq = [
+            Fp::new(100),Fp::new(90),Fp::new(80),Fp::new(70),Fp::new(60),Fp::new(50),Fp::new(40),Fp::new(30),Fp::new(20)
+        ];
+        let sq1 = [
+            Fp::new(10),Fp::new(20),Fp::new(30),Fp::new(40),Fp::new(50),Fp::new(60),Fp::new(70),Fp::new(80),Fp::new(90)
+        ];
+        let sq2 = [
+            Fp::new(1),Fp::new(2),Fp::new(3),Fp::new(4),Fp::new(5),Fp::new(6),Fp::new(7),Fp::new(8),Fp::new(9)
+        ];
+        let dpq = PriceQuantity::new(dq);
+        let spq1 = PriceQuantity::new(sq1);
+        let spq2 = PriceQuantity::new(sq2);
+        let res1 = (120u64,50u64);
+        assert_eq!(res1,clearing_price(dpq, spq1).unwrap().clone());
+        assert_eq!(None,clearing_price(dpq, spq2));
     }
 
+    #[test]
+    fn test_allocate(){
+        let (d1,total,traded) = (50,100,20);
+        let a1 = allocate(d1,total,traded);
+        assert_eq!(10u64,a1);
+    }
 }
 
