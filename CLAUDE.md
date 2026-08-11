@@ -68,3 +68,4 @@
 
 - 2026-08-10: `mpc-rust`プロジェクト作成、`Fp`型(法M上の演算)と加法的秘密分散`split_into_shares`/`reconstruct`を実装・テスト完了(spec §8.1〜8.3)
 - 2026-08-11: `PriceQuantity`(9段階価格グリッドの導出ベクトル)と`quantities_share`/`quantities_join`(1人分の分散・復元)を実装。`Node`構造体で局所合算(`add_share`)と3ノード分の復元(`add_node`)を実装・テスト完了(spec §8.2〜8.3)。次回は§8.4清算価格ロジック
+- 2026-08-11: `secret_sharing.rs`/`node.rs`/`auction.rs`にファイル分割。`clearing_price`(§8.4)実装にあわせ、清算価格の定義を「D(p) <= S(p)を満たす最も低い価格」(買い手優先)に決定し、DESIGN.md/spec_v0.4.mdを修正。`allocate`(§8.5按分)を実装・全11テスト完了でMPCコアロジックの部品が出揃った。tokioの基礎(`async`/`.await`/`join!`)にも入門。次回はB1〜S2をテスト可能な形で通しで動かす関数、その後tokioでの実プロセス分離
