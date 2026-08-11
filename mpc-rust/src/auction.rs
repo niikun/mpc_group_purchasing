@@ -42,6 +42,27 @@ impl PriceQuantity {
     }
 }
 
+pub fn derive(threshhold:u64,quantity:u64,is_buyer:bool) -> PriceQuantity{
+    let mut price_quantities = PriceQuantity::new([Fp::zero();9]);
+    match is_buyer{
+        true => {
+            for (i,price) in PRICES.iter().enumerate(){
+                if price <= &threshhold{
+                    price_quantities.quantities[i] = Fp::new(quantity);
+                }
+            }
+        }
+        false => {
+            for (i,price) in PRICES.iter().enumerate(){
+                if price >= &threshhold{
+                    price_quantities.quantities[i] = Fp::new(quantity);
+                }
+            }
+        }
+    }
+    price_quantities
+}
+
 fn clearing_price(demand:PriceQuantity, supply:PriceQuantity)->Option<(u64,u64)>{
     for ((d,s),p) in demand.quantities.iter().zip(supply.quantities.iter()).zip(PRICES.iter()){
         if d <= s{
@@ -57,6 +78,18 @@ pub fn allocate(desired: u64, total: u64, traded: u64) -> u64 {
 mod tests{
     use super::*;
     use rand::Rng;
+
+    #[test]
+    fn test_derive(){
+        // pub const PRICES: [u64; 9] = [95,100,105,110,115,120,125,130,135];
+        let pq1 = derive(120,100,true);
+        let pq1_test = PriceQuantity::new([Fp::new(100),Fp::new(100),Fp::new(100),Fp::new(100),Fp::new(100),Fp::new(100),Fp::zero(),Fp::zero(),Fp::zero()]);
+        assert_eq!(pq1,pq1_test);
+        
+        let pq2 = derive(100,100,false);
+        let pq2_test = PriceQuantity::new([Fp::zero(),Fp::new(100),Fp::new(100),Fp::new(100),Fp::new(100),Fp::new(100),Fp::new(100),Fp::new(100),Fp::new(100)]);
+        assert_eq!(pq2,pq2_test);    
+    }
 
     #[test]
     fn test_quantity(){
