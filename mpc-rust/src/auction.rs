@@ -1,4 +1,4 @@
-use std::intrinsics::discriminant_value;
+// use std::intrinsics::discriminant_value;
 
 use crate::secret_sharing::{Fp, Share, split_into_shares};
 use crate::node::{Node, Branch};
@@ -87,7 +87,7 @@ fn aggrigate_market(
     quantity_b3:u64,
     quantity_s1:u64,
     quantity_s2:u64
-)->Option<(u64,u64,u64)>{
+)->Option<(u64,(u64,u64,u64,u64,u64))>{
     // 3社　B1,B2,B3
     let b1_pq = derive(threshold_b1,quantity_b1,true);
     let b2_pq = derive(threshold_b2,quantity_b2,true);
@@ -129,18 +129,20 @@ fn aggrigate_market(
     let total_node = Node::add_node(node_a, node_b, node_c);
     let demand_quantity:PriceQuantity = PriceQuantity { quantities:total_node.buyer_quantities};
     let supply_quantity:PriceQuantity = PriceQuantity { quantities: total_node.seller_quantities};
-    for demand_quantity
     // 需要と供給を計算
-    if let Some((price, total_quantity)) = clearing_price(demand_quantity, supply_quantity){
-        let b1_trade = allocate(quantity_b1,total_node.buyer_quantities.iter().max(),total_quantity);
-        let b2_trade = allocate(quantity_b2,total_node.buyer_quantities.iter().max(),total_quantity);
-        let b3_trade = allocate(quantity_b3,total_node.buyer_quantities.iter().max(),total_quantity);
-        Some((b1_trade, b2_trade, b3_trade))
-    }else{
-        None
+    match clearing_price(demand_quantity, supply_quantity){
+        Some((price, total_quantity)) =>{
+            let position = PRICES.iter().position(|p| *p == price).unwrap();
+            let b1_trade = allocate(quantity_b1,demand_quantity.quantities[position as usize].value(),total_quantity);
+            let b2_trade = allocate(quantity_b2,demand_quantity.quantities[position as usize].value(),total_quantity);
+            let b3_trade = allocate(quantity_b3,demand_quantity.quantities[position as usize].value(),total_quantity);
+            
+            let s1_trade = allocate(quantity_s1,supply_quantity.quantities[position as usize].value(),total_quantity);
+            let s2_trade = allocate(quantity_s2,supply_quantity.quantities[position as usize].value(),total_quantity);
+            return Some((price,(b1_trade, b2_trade, b3_trade, s1_trade, s2_trade)));
+        },
+        None => return None,
     }
-
-
 }
 
 #[cfg(test)]
