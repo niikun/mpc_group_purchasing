@@ -8,8 +8,8 @@ pub enum Branch {
 
 #[derive(Debug, Clone,PartialEq)]
 pub struct Node{
-    seller_quantities:[Fp;9],
-    buyer_quantities:[Fp;9]
+    pub seller_quantities:[Fp;9],
+    pub buyer_quantities:[Fp;9]
 }
 
 impl Node {

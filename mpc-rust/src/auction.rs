@@ -1,3 +1,5 @@
+use std::intrinsics::discriminant_value;
+
 use crate::secret_sharing::{Fp, Share, split_into_shares};
 use crate::node::{Node, Branch};
 
@@ -72,6 +74,73 @@ fn clearing_price(demand:PriceQuantity, supply:PriceQuantity)->Option<(u64,u64)>
 }
 pub fn allocate(desired: u64, total: u64, traded: u64) -> u64 {
     traded * desired / total 
+}
+
+fn aggrigate_market(
+    threshold_b1:u64,
+    threshold_b2:u64,
+    threshold_b3:u64,
+    threshold_s1:u64,
+    threshold_s2:u64,
+    quantity_b1:u64,
+    quantity_b2:u64,
+    quantity_b3:u64,
+    quantity_s1:u64,
+    quantity_s2:u64
+)->Option<(u64,u64,u64)>{
+    // 3社　B1,B2,B3
+    let b1_pq = derive(threshold_b1,quantity_b1,true);
+    let b2_pq = derive(threshold_b2,quantity_b2,true);
+    let b3_pq = derive(threshold_b3,quantity_b3,true);
+    //  2社 S1,S2
+    let s1_pq = derive(threshold_s1,quantity_s1,false);
+    let s2_pq = derive(threshold_s2,quantity_s2,false);
+    // 3つのNode
+    let mut node_a = Node::new();
+    let mut node_b = Node::new();
+    let mut node_c = Node::new();
+    //それぞれのpqを分割
+    let (b1_a,b1_b,b1_c) = b1_pq.quantities_share();
+    let (b2_a,b2_b,b2_c) = b2_pq.quantities_share();
+    let (b3_a,b3_b,b3_c) = b3_pq.quantities_share();
+    let (s1_a,s1_b,s1_c) = s1_pq.quantities_share();
+    let (s2_a,s2_b,s2_c) = s2_pq.quantities_share();
+    //それぞれのnodeに足し上げる
+    //node_a
+    node_a.add_share(b1_a, Branch::Buyer);
+    node_a.add_share(b2_a, Branch::Buyer);
+    node_a.add_share(b3_a, Branch::Buyer);
+    node_a.add_share(s1_a, Branch::Seller);
+    node_a.add_share(s2_a, Branch::Seller);
+    //node_b
+    node_b.add_share(b1_b, Branch::Buyer);
+    node_b.add_share(b2_b, Branch::Buyer);
+    node_b.add_share(b3_b, Branch::Buyer);
+    node_b.add_share(s1_b, Branch::Seller);
+    node_b.add_share(s2_b, Branch::Seller);
+    //node_c
+    node_c.add_share(b1_c, Branch::Buyer);
+    node_c.add_share(b2_c, Branch::Buyer);
+    node_c.add_share(b3_c, Branch::Buyer);
+    node_c.add_share(s1_c, Branch::Seller);
+    node_c.add_share(s2_c, Branch::Seller);
+
+    // node_a,node_b,node_cを合体
+    let total_node = Node::add_node(node_a, node_b, node_c);
+    let demand_quantity:PriceQuantity = PriceQuantity { quantities:total_node.buyer_quantities};
+    let supply_quantity:PriceQuantity = PriceQuantity { quantities: total_node.seller_quantities};
+    for demand_quantity
+    // 需要と供給を計算
+    if let Some((price, total_quantity)) = clearing_price(demand_quantity, supply_quantity){
+        let b1_trade = allocate(quantity_b1,total_node.buyer_quantities.iter().max(),total_quantity);
+        let b2_trade = allocate(quantity_b2,total_node.buyer_quantities.iter().max(),total_quantity);
+        let b3_trade = allocate(quantity_b3,total_node.buyer_quantities.iter().max(),total_quantity);
+        Some((b1_trade, b2_trade, b3_trade))
+    }else{
+        None
+    }
+
+
 }
 
 #[cfg(test)]
