@@ -67,12 +67,26 @@ pub fn derive(threshhold:u64,quantity:u64,is_buyer:bool) -> PriceQuantity{
 
 fn clearing_price(demand:PriceQuantity, supply:PriceQuantity)->Option<(u64,u64)>{
     for ((d,s),p) in demand.quantities.iter().zip(supply.quantities.iter()).zip(PRICES.iter()){
-        if d <= s{
+        let mut total_demand = Fp::zero();
+        let mut total_supply = Fp::zero();
+        for d in demand.quantities.iter(){
+            total_demand = total_demand + *d;
+        }
+        for s in supply.quantities.iter(){
+            total_supply = total_supply + *s;
+        }
+        if total_demand == Fp::zero() || total_supply == Fp::zero(){
+            return None;
+        } else if d <= s{
             return Some((*p, d.value()));
         }
-    }    None
+    }
+        None
 }
 pub fn allocate(desired: u64, total: u64, traded: u64) -> u64 {
+    if total == 0{
+        return 0 as u64;
+    }
     traded * desired / total 
 }
 
@@ -107,23 +121,23 @@ fn aggrigate_market(
     let (s2_a,s2_b,s2_c) = s2_pq.quantities_share();
     //それぞれのnodeに足し上げる
     //node_a
-    node_a.add_share(b1_a, Branch::Buyer);
-    node_a.add_share(b2_a, Branch::Buyer);
-    node_a.add_share(b3_a, Branch::Buyer);
-    node_a.add_share(s1_a, Branch::Seller);
-    node_a.add_share(s2_a, Branch::Seller);
+    node_a = node_a.add_share(b1_a, Branch::Buyer);
+    node_a = node_a.add_share(b2_a, Branch::Buyer);
+    node_a = node_a.add_share(b3_a, Branch::Buyer);
+    node_a = node_a.add_share(s1_a, Branch::Seller);
+    node_a = node_a.add_share(s2_a, Branch::Seller);
     //node_b
-    node_b.add_share(b1_b, Branch::Buyer);
-    node_b.add_share(b2_b, Branch::Buyer);
-    node_b.add_share(b3_b, Branch::Buyer);
-    node_b.add_share(s1_b, Branch::Seller);
-    node_b.add_share(s2_b, Branch::Seller);
+    node_b = node_b.add_share(b1_b, Branch::Buyer);
+    node_b = node_b.add_share(b2_b, Branch::Buyer);
+    node_b = node_b.add_share(b3_b, Branch::Buyer);
+    node_b = node_b.add_share(s1_b, Branch::Seller);
+    node_b = node_b.add_share(s2_b, Branch::Seller);
     //node_c
-    node_c.add_share(b1_c, Branch::Buyer);
-    node_c.add_share(b2_c, Branch::Buyer);
-    node_c.add_share(b3_c, Branch::Buyer);
-    node_c.add_share(s1_c, Branch::Seller);
-    node_c.add_share(s2_c, Branch::Seller);
+    node_c = node_c.add_share(b1_c, Branch::Buyer);
+    node_c = node_c.add_share(b2_c, Branch::Buyer);
+    node_c = node_c.add_share(b3_c, Branch::Buyer);
+    node_c = node_c.add_share(s1_c, Branch::Seller);
+    node_c = node_c.add_share(s2_c, Branch::Seller);
 
     // node_a,node_b,node_cを合体
     let total_node = Node::add_node(node_a, node_b, node_c);
@@ -133,12 +147,25 @@ fn aggrigate_market(
     match clearing_price(demand_quantity, supply_quantity){
         Some((price, total_quantity)) =>{
             let position = PRICES.iter().position(|p| *p == price).unwrap();
-            let b1_trade = allocate(quantity_b1,demand_quantity.quantities[position as usize].value(),total_quantity);
-            let b2_trade = allocate(quantity_b2,demand_quantity.quantities[position as usize].value(),total_quantity);
-            let b3_trade = allocate(quantity_b3,demand_quantity.quantities[position as usize].value(),total_quantity);
-            
-            let s1_trade = allocate(quantity_s1,supply_quantity.quantities[position as usize].value(),total_quantity);
-            let s2_trade = allocate(quantity_s2,supply_quantity.quantities[position as usize].value(),total_quantity);
+            // Buyer
+            let  (mut b1_trade, mut b2_trade, mut b3_trade) = (0 as u64,0 as u64,0 as u64);
+            let (mut s1_trade, mut s2_trade) = (0 as u64,0 as u64);
+            if price <= threshold_b1{
+                b1_trade = allocate(quantity_b1,demand_quantity.quantities[position as usize].value(),total_quantity);
+            } 
+            if price <= threshold_b2{
+                b2_trade = allocate(quantity_b2,demand_quantity.quantities[position as usize].value(),total_quantity);
+            } 
+            if price <= threshold_b3{
+                b3_trade = allocate(quantity_b3,demand_quantity.quantities[position as usize].value(),total_quantity);
+             } 
+            // Seller
+            if price >= threshold_s1{
+                s1_trade = allocate(quantity_s1,supply_quantity.quantities[position as usize].value(),total_quantity);
+            }
+            if price >= threshold_s2 {
+                s2_trade = allocate(quantity_s2,supply_quantity.quantities[position as usize].value(),total_quantity);
+            }
             return Some((price,(b1_trade, b2_trade, b3_trade, s1_trade, s2_trade)));
         },
         None => return None,
@@ -211,5 +238,64 @@ mod tests{
         let a1 = allocate(d1,total,traded);
         assert_eq!(10u64,a1);
     }
+
+    #[test]
+    fn test_aggrigate_market(){
+        // [95,100,105,110,115,120,125,130,135];
+        let threshold_b1:u64 = 110;
+        let threshold_b2:u64 = 100;
+        let threshold_b3:u64 = 105;
+        let threshold_s1:u64 = 100;
+        let threshold_s2:u64 = 100;
+        let quantity_b1:u64 = 100;
+        let quantity_b2:u64 = 100;
+        let quantity_b3:u64 = 100;
+        let quantity_s1:u64 = 200;
+        let quantity_s2:u64 = 200;
+        let result = aggrigate_market(threshold_b1, threshold_b2, threshold_b3, threshold_s1, threshold_s2, quantity_b1, quantity_b2, quantity_b3, quantity_s1, quantity_s2);
+        assert_eq!(result.unwrap().0, 100);
+        assert_eq!(result.unwrap().1.0,100);
+        assert_eq!(result.unwrap().1.1,100);
+        assert_eq!(result.unwrap().1.2,100);
+        assert_eq!(result.unwrap().1.3,150);
+        assert_eq!(result.unwrap().1.4,150);       
+    }
+    #[test]
+    fn test_aggrigate_market2(){
+        // [95,100,105,110,115,120,125,130,135];
+        let threshold_b1:u64 = 110;
+        let threshold_b2:u64 = 120;
+        let threshold_b3:u64 = 100;
+        let threshold_s1:u64 = 100;
+        let threshold_s2:u64 = 100;
+        let quantity_b1:u64 = 0;
+        let quantity_b2:u64 = 0;
+        let quantity_b3:u64 = 0;
+        let quantity_s1:u64 = 200;
+        let quantity_s2:u64 = 200;
+        let result = aggrigate_market(threshold_b1, threshold_b2, threshold_b3, threshold_s1, threshold_s2, quantity_b1, quantity_b2, quantity_b3, quantity_s1, quantity_s2);
+        assert_eq!(result, None);
+    }
+    #[test]
+    fn test_aggrigate_market3(){
+        // [95,100,105,110,115,120,125,130,135];
+        let threshold_b1:u64 = 110;
+        let threshold_b2:u64 = 120;
+        let threshold_b3:u64 = 95;
+        let threshold_s1:u64 = 110;
+        let threshold_s2:u64 = 100;
+        let quantity_b1:u64 = 200;
+        let quantity_b2:u64 = 100;
+        let quantity_b3:u64 = 100;
+        let quantity_s1:u64 = 200;
+        let quantity_s2:u64 = 200;
+        let result = aggrigate_market(threshold_b1, threshold_b2, threshold_b3, threshold_s1, threshold_s2, quantity_b1, quantity_b2, quantity_b3, quantity_s1, quantity_s2);
+        assert_eq!(result.unwrap().0, 110);
+        assert_eq!(result.unwrap().1.0,200);
+        assert_eq!(result.unwrap().1.1,100);
+        assert_eq!(result.unwrap().1.2,0);
+        assert_eq!(result.unwrap().1.3,150);
+        assert_eq!(result.unwrap().1.4,150);       
+    }    
 }
 
