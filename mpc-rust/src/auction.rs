@@ -65,7 +65,7 @@ pub fn derive(threshhold:u64,quantity:u64,is_buyer:bool) -> PriceQuantity{
     price_quantities
 }
 
-fn clearing_price(demand:PriceQuantity, supply:PriceQuantity)->Option<(u64,u64)>{
+pub fn clearing_price(demand:PriceQuantity, supply:PriceQuantity)->Option<(u64,u64)>{
     for ((d,s),p) in demand.quantities.iter().zip(supply.quantities.iter()).zip(PRICES.iter()){
         let mut total_demand = Fp::zero();
         let mut total_supply = Fp::zero();

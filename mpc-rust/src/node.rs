@@ -1,6 +1,7 @@
 use crate::secret_sharing::{Fp, Share, split_into_shares};
 use crate::auction::{PRICES, PriceQuantity};
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Branch {
     Seller,
     Buyer
