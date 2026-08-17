@@ -1,13 +1,14 @@
 use crate::secret_sharing::{Fp, Share, split_into_shares};
 use crate::auction::{PRICES, PriceQuantity};
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Branch {
     Seller,
     Buyer
 }
 
-#[derive(Debug, Clone,PartialEq)]
+#[derive(Debug, Clone,PartialEq, Serialize, Deserialize)]
 pub struct Node{
     pub seller_quantities:[Fp;9],
     pub buyer_quantities:[Fp;9]
