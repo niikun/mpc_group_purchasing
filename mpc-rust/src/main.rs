@@ -1,12 +1,8 @@
-mod secret_sharing;
-mod auction;
-mod node;
-
 use tokio::sync::mpsc;
-use secret_sharing::Fp;
-use node::{Node, Branch};
+use mpc_rust::secret_sharing::Fp;
+use mpc_rust::node::{Node, Branch};
 
-use crate::auction::{PriceQuantity, clearing_price};
+use mpc_rust::auction::{PriceQuantity, clearing_price, allocate, derive};
 
 #[tokio::main]
 async fn main() {
@@ -108,14 +104,14 @@ async fn main() {
             let mut seller_allocated = [0u64;2];
             for (i,(th, q)) in threshold_buyers.iter().zip(quantities_buyers.iter()).enumerate(){
                 if price <= *th {
-                    let allocated = auction::allocate(*q, total_demand, quentities);
+                    let allocated = allocate(*q, total_demand, quentities);
                     println!("b{} : {}", i, allocated);
                     buyer_allocated[i] = allocated;
                 }
             }
             for (i,  (th, q)) in threshold_sellers.iter().zip(quantities_sellers.iter()).enumerate(){
                 if price >= *th {
-                    let allocated = auction::allocate(*q, total_supply, quentities);
+                    let allocated = allocate(*q, total_supply, quentities);
                     println!("s{} : {}", i, allocated);
                     seller_allocated[i] = allocated;
                 }
@@ -128,8 +124,8 @@ async fn main() {
     }
 }
 
-fn set_share_for_send(thereshold:u64, quantitiy:u64, is_buyer:bool)->([[Fp;9];3],Branch){
-    let pq = auction::derive(thereshold, quantitiy, is_buyer);
+fn set_share_for_send(thereshold:u64, quantitiy:u64, is_buyer:bool)->([[mpc_rust::secret_sharing::Fp;9];3],Branch){
+    let pq = derive(thereshold, quantitiy, is_buyer);
     let (pq_share_a, pq_share_b, pq_share_c) = pq.quantities_share();
     let mut branch = Branch::Buyer;
     if !is_buyer{
