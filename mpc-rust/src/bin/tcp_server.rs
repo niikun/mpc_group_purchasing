@@ -1,3 +1,4 @@
+use std::env;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -6,8 +7,18 @@ use mpc_rust::node::{Node, Branch};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
+    let args:Vec<String> = env::args().collect();
+    if args.len() <= 1{
+        eprintln!("Usage: {} <port> <port>...", args[0]);
+        std::process::exit(1);
+    }
+    let addresses = args.iter().skip(1)
+        .map(|s| format!("127.0.0.1:{}", s.parse::<u16>().expect("invalid port number")))
+        .collect::<Vec<String>>(); 
+
     let node: Arc<Mutex<Node>> = Arc::new(Mutex::new(Node::new()));
-    let listener = TcpListener::bind("127.0.0.1:8000").await?;
+
+    let listener = TcpListener::bind(&addresses[0]).await?;
     println!("listening...");
 
     loop {
