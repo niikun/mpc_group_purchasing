@@ -172,6 +172,16 @@ fn aggrigate_market(
     }
 }
 
+pub fn set_share_for_send(thereshold:u64, quantitiy:u64, is_buyer:bool)->([[Fp;9];3],Branch){
+    let pq = derive(thereshold, quantitiy, is_buyer);
+    let (pq_share_a, pq_share_b, pq_share_c) = pq.quantities_share();
+    let mut branch = Branch::Buyer;
+    if !is_buyer{
+        branch = Branch::Seller;
+    }
+    ([pq_share_a, pq_share_b, pq_share_c], branch)
+}
+
 #[cfg(test)]
 mod tests{
     use super::*;

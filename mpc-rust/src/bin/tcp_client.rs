@@ -1,3 +1,4 @@
+use std::env;
 use tokio::net::TcpStream;
 use tokio::io::AsyncWriteExt;
 use serde::{Serialize, Deserialize};
@@ -9,8 +10,11 @@ use mpc_rust::node::{Node, Branch};
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     // TODO: tcp_server.rs が bind しているアドレス(127.0.0.1:8000)に
-    //       TcpStream::connect で接続する
-    let mut stream = TcpStream::connect("127.0.0.1:8000").await?;
+    //       TcpStream::connect 
+
+    let args:Vec<String> = env::args().collect();
+    let address = format!("127.0.0.1:{}",args[1]);
+    let mut stream = TcpStream::connect(address).await?;
     let share = [Fp::one();9];
     let branch = Branch::Buyer;
     let test_value = (share, branch);

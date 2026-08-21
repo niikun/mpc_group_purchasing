@@ -2,7 +2,7 @@ use tokio::sync::mpsc;
 use mpc_rust::secret_sharing::Fp;
 use mpc_rust::node::{Node, Branch};
 
-use mpc_rust::auction::{PriceQuantity, clearing_price, allocate, derive};
+use mpc_rust::auction::{PriceQuantity, clearing_price, allocate, derive, set_share_for_send};
 
 #[tokio::main]
 async fn main() {
@@ -124,12 +124,3 @@ async fn main() {
     }
 }
 
-fn set_share_for_send(thereshold:u64, quantitiy:u64, is_buyer:bool)->([[mpc_rust::secret_sharing::Fp;9];3],Branch){
-    let pq = derive(thereshold, quantitiy, is_buyer);
-    let (pq_share_a, pq_share_b, pq_share_c) = pq.quantities_share();
-    let mut branch = Branch::Buyer;
-    if !is_buyer{
-        branch = Branch::Seller;
-    }
-    ([pq_share_a, pq_share_b, pq_share_c], branch)
-}
