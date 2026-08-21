@@ -32,12 +32,13 @@ async fn main() -> std::io::Result<()> {
     let (shares_s2, branch_s2) = set_share_for_send(threshold_s2, quantity_s2, false);
     let shares_all = Vec::from([shares_b1, shares_b2, shares_b3, shares_s1, shares_s2]);
     let branch_all = Vec::from([branch_b1, branch_b2, branch_b3, branch_s1, branch_s2]);
-
+    // ３nodeのアドレス設定
     let addr1 = "127.0.0.1:8000";
     let addr2 = "127.0.0.1:8001";
     let addr3 = "127.0.0.1:8002";
     let addresses:Vec::<&str> = Vec::from([addr1, addr2, addr3]);
 
+    // 各ノードにshareを送信
     for (shares, branch) in shares_all.iter().zip(branch_all.iter()){
         for (share, addr) in shares.iter().zip(addresses.iter()){
             let mut stream = TcpStream::connect(addr).await?;
@@ -45,7 +46,6 @@ async fn main() -> std::io::Result<()> {
             let values_serialized =  serde_json::to_string(&values).unwrap();
             let msg = format!("{}\n",values_serialized);
             stream.write_all(msg.as_bytes()).await?;
-            drop(stream);
         }
     }
     Ok(())
