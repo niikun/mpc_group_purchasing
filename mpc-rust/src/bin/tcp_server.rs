@@ -1,7 +1,8 @@
 use std::env;
 use std::sync::{Arc, Mutex};
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::AsyncWriteExt;
 use mpc_rust::secret_sharing::Fp;
 use mpc_rust::node::{Node, Branch};
 
@@ -27,7 +28,8 @@ async fn main() -> std::io::Result<()> {
         println!("connected: {addr}");
 
         tokio::spawn(async move {
-            let mut reader = BufReader::new(socket);
+            let (mut rd, mut wr) = socket.into_split();
+            let mut reader = BufReader::new(rd);
 
             loop {
                 let mut line = String::new();
@@ -36,16 +38,23 @@ async fn main() -> std::io::Result<()> {
                         // EOF: クライアントが切断
                         println!("disconnected: {addr}");
                         break;
-                    }
-                    Ok(_) => {}
+                    },
+                    Ok(_) => {},
                     Err(e) => {
                         eprintln!("read error from {addr}: {e}");
                         break;
                     }
                 }
-
+                if line.trim() == serde_json::to_string("GET").unwrap(){
+                    let msg: String = serde_json::to_string(&*_node.lock().unwrap()).unwrap();
+                    let messeage = format!("{msg}\n");
+                    wr.write_all(messeage.as_bytes()).await.unwrap();
+                    break;
+                    }
                 let messages: ([Fp; 9], Branch) = match serde_json::from_str(line.trim()) {
-                    Ok(m) => m,
+                    Ok(m) => {
+                        m
+                    },
                     Err(e) => {
                         eprintln!("parse error from {addr}: {e}");
                         continue; // このメッセージだけスキップして接続は継続

@@ -13,13 +13,14 @@ async fn main() -> std::io::Result<()> {
     let mut stream = TcpStream::connect("127.0.0.1:8000").await?;
     let share = [Fp::one();9];
     let branch = Branch::Buyer;
-    let test_value = (share, branch);
+    // let test_value = (share, branch);
+    let test_value = "GET";
     let test_json = serde_json::to_string(&test_value)?;
-    // let msg = format!("{}\n",test_json);
-    let msg = format!(
-    r#"[[{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}}],"Buyer"]
-"#
-);
+    let msg = format!("{}\n",test_json);
+//     let msg = format!(
+//     r#"[[{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}},{{"value":18446744073709551615}}],"Buyer"]
+// "#
+// );
 
 
     // TODO: AsyncWriteExt が提供する write_all で stream に書き込む

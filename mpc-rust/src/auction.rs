@@ -90,7 +90,7 @@ pub fn allocate(desired: u64, total: u64, traded: u64) -> u64 {
     traded * desired / total 
 }
 
-fn aggrigate_market(
+pub fn aggrigate_market(
     threshold_b1:u64,
     threshold_b2:u64,
     threshold_b3:u64,
