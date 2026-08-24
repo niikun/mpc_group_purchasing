@@ -1,11 +1,14 @@
 use std::env;
-use tokio::net::TcpStream;
-use tokio::io::AsyncWriteExt;
+use tokio::io::BufReader;
+
+use tokio::net::{TcpStream, TcpListener};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use serde::{Serialize, Deserialize};
 
 use mpc_rust::secret_sharing::Fp;
 use mpc_rust::node::{Node, Branch};
 use mpc_rust::auction::{set_share_for_send};
+use tokio::net::tcp::OwnedReadHalf;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
@@ -48,5 +51,21 @@ async fn main() -> std::io::Result<()> {
             stream.write_all(msg.as_bytes()).await?;
         }
     }
+    let mut total_node_vec = Vec::new();
+    for addr in addresses{
+        let mut stream = TcpStream::connect(addr).await?;
+        let values = "GET";
+        let values_serialized = serde_json::to_string(&values).unwrap();
+        let msg = format!("{}\n",values_serialized);
+        stream.write_all(msg.as_bytes()).await?;
+        
+        let mut reader = BufReader::new(&mut stream);
+        let mut line = String::new();
+        reader.read_line(&mut line).await?;
+        let msg:Node = serde_json::from_str(&line.trim()).unwrap();
+        total_node_vec.push(msg);     
+    }
+    let total = Node::add_node(total_node_vec[0].clone(), total_node_vec[1].clone(),total_node_vec[2].clone());
+    println!("Total_node : {:?}", total);
     Ok(())
 }
