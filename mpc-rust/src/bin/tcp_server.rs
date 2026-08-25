@@ -1,6 +1,6 @@
 use std::env;
 use std::sync::{Arc, Mutex};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::io::AsyncWriteExt;
 use mpc_rust::secret_sharing::Fp;
@@ -28,7 +28,7 @@ async fn main() -> std::io::Result<()> {
         println!("connected: {addr}");
 
         tokio::spawn(async move {
-            let (mut rd, mut wr) = socket.into_split();
+            let (rd, mut wr) = socket.into_split();
             let mut reader = BufReader::new(rd);
 
             loop {

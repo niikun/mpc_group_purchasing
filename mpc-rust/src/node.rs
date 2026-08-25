@@ -1,5 +1,4 @@
-use crate::secret_sharing::{Fp, Share, split_into_shares};
-use crate::auction::{PRICES, PriceQuantity};
+use crate::secret_sharing::Fp;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

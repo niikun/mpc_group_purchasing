@@ -1,13 +1,13 @@
 // use std::intrinsics::discriminant_value;
 
-use crate::secret_sharing::{Fp, Share, split_into_shares};
+use crate::secret_sharing::{Fp, split_into_shares};
 use crate::node::{Node, Branch};
 
 pub const PRICES: [u64; 9] = [95,100,105,110,115,120,125,130,135];
 
 #[derive(PartialEq, Eq,Debug,Clone, Copy)]
 pub struct PriceQuantity{
-    quantities:[Fp;9]
+    pub quantities:[Fp;9]
 }
 
 impl PriceQuantity {
@@ -18,10 +18,6 @@ impl PriceQuantity {
     pub fn from_quantities(values: &[u64; 9]) -> Self {
         let quantities:[Fp;9] = values.map(|v| Fp::new(v));
         PriceQuantity::new(quantities)
-    }
-
-    fn to_quantities(&self) -> [u64; 9] {
-        self.quantities.map(|bit:Fp| bit.value())
     }
 
     pub fn quantities_share(self:PriceQuantity)->([Fp;9],[Fp;9],[Fp;9]){
