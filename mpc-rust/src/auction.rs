@@ -20,6 +20,10 @@ impl PriceQuantity {
         PriceQuantity::new(quantities)
     }
 
+    fn to_quantities(&self) -> [u64; 9] {
+        self.quantities.map(|q| q.value())
+    }
+
     pub fn quantities_share(self:PriceQuantity)->([Fp;9],[Fp;9],[Fp;9]){
         let quantities_shares = self.quantities.map(|q:Fp| split_into_shares(q));
         let (mut share_1, mut share_2, mut share_3) = ([Fp::zero();9], [Fp::zero();9], [Fp::zero();9]);
@@ -192,7 +196,7 @@ mod tests{
         
         let pq2 = derive(100,100,false);
         let pq2_test = PriceQuantity::new([Fp::zero(),Fp::new(100),Fp::new(100),Fp::new(100),Fp::new(100),Fp::new(100),Fp::new(100),Fp::new(100),Fp::new(100)]);
-        assert_eq!(pq2,pq2_test);    
+        assert_eq!(pq2,pq2_test);
     }
 
     #[test]
