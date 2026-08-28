@@ -25,16 +25,15 @@
 
 | 段階 | 技術 | 言語 | 状態 |
 |---|---|---|---|
-| 第1段階 | MPC(加法的秘密分散 → 将来的にShamir k-of-n) | Rust | 未着手 |
-| 第2段階 | FHE(Zama fhEVM) | Solidity + TypeScript(`@zama-fhe/relayer-sdk`) | 未着手 |
+| 第1段階 | MPC(加法的秘密分散 → 将来的にShamir k-of-n) | Rust | 完了(デモ版、実プロセス版まで) |
+| 第2段階 | FHE(Zama `tfhe-rs`) | Rust | 着手中 |
 
 同じダブルオークションのロジックを2つの技術で実装し、トレードオフ(信頼の起点、オンチェーン性、実装コスト)を比較することが最終的なアウトプットの核。
 
 ## 技術選定の理由(ユーザーとの合意事項)
 
 - 第1段階はRust。ユーザーが3ヶ月の経験を持ち、MPC分野でも`swanky`等の本格的なライブラリがRustで書かれているため。
-- 第2段階はSolidity(コントラクト)+ TypeScript(クライアント)。fhEVMの設計上この組み合わせが必須で、選択の余地はない。
-- ノード運営・しきい値復号のインフラは自前実装しない。第2段階はZamaのKMS(13ノードのしきい値復号)を利用する前提。
+- 第2段階は`tfhe-rs`(Zama社のRust製FHEライブラリ)。**2026-08-21に方針転換**: 当初はSolidity(コントラクト)+ TypeScript(クライアント)によるfhEVM実装を予定していたが、Zama公式のダークマーケット実装例(tfhe-rsでのボリュームマッチング、まさに本プロジェクトと同種の問題)を発見したことをきっかけに再検討。残りのコース期間で2つの新しい言語(Solidity・TypeScript)を0から学ぶリスクと、Rustの知識をそのまま活かせる利点を比較し、`tfhe-rs`を採用。トレードオフとして、fhEVMのオンチェーン性とZamaのしきい値復号KMS(13ノード)の恩恵は得られないため、復号鍵の扱いは第1段階の3ノード加法的分散と同様、簡略化して扱う(15章の制限事項に追記予定)。
 
 ## ディレクトリ構成(想定)
 
@@ -44,11 +43,9 @@
     secret_sharing.rs
     node.rs          # tokio/tonicでの複数プロセス通信
     auction.rs        # 清算価格ロジック
-/fhe-solidity/       # 第2段階:fhEVM実装
-  contracts/
-    Auction.sol
-  test/
-  client/            # TypeScript, relayer-sdk
+/fhe-rust/           # 第2段階:tfhe-rs実装
+  src/
+    auction.rs         # FHE版の清算価格・按分ロジック
 /docs/
   DESIGN.md           # 詳細仕様(価格グリッド・清算ロジック・按分計算)
   progress.md          # 週次の学習・実装メモ
@@ -89,3 +86,5 @@
 - 2026-08-21: `simulate.rs`のテストを実装。詰まった点は複数。(1) `Trader::new(is_buyer, true_value, threshold, quantity)`の引数順を勘違いし、`threshold`/`quantity`の値を1つずつズラして渡していた(結果、売り手の`threshold`が価格グリッド最大値135を超え、供給が常に0になって`clearing_price`が`None`を返す事態に)。(2) 個別`allocate`計算で、`round`が既に返す`total_demand`/`total_supply`を使わず、空の`Node::new()`から`demand_quantity`/`supply_quantity`を再計算しようとして常にゼロになっていた。(3) `match`の`Some`アームの中で外側と同名の`b1_trade`等を`let`で再宣言してしまい(シャドーイング)、アーム内で更新した値がアームを抜けると消え、外側の変数(常に初期値0のまま)を`assert_eq!`していた。(2)(3)は`round`の返り値をそのまま使い、`if price <= threshold {...} else {0}`という素直な形に書き直して解消。買い手は`allocate(desired, total_demand, quantity)`で`total_demand==quantity`のため必ずフル約定、売り手は`allocate(desired, total_supply, quantity)`で按分、という結果(b1=100,b2=200,b3=300,s1=266,s2=333)が過去の実プロセス版と一致することをテストで確認。`Trader`→`trade`(1人分のシェア生成)→`round`(3ノード集計・清算価格)→`allocate`(個別約定量)まで、本物の秘密分散を通したシミュレーションの1ラウンド分が完成。次回はここから: 各`Trader`の利益(`true_value`と清算価格の差)を計算する処理、その後複数ラウンドを繰り返し`threshold`を戦略的に調整するロジックに進む
 - 2026-08-21: `Trader::profit`(利益計算)を実装。`u64`のまま引き算してから`i64`に変換していたため、価格が評価額を上回る(損する)ケースで桁あふれパニックする潜在バグに気づき、`as i64`を引き算の前に付けて解消。続けて`Trader::adjust`(不成立なら`threshold`を`true_value`に近づける適応ルール)を実装する過程でテストのタイポ(コピペ後に変数名を変え忘れ`trader1`を見るべきところ`trader3`のまま、期待値`110`が本来`125`など)を2件発見・修正。`round`のシグネチャを`(Vec<[[Fp;9];3]>, Vec<Branch>)`から`&[Trader]`一本に変更し(`round`内部で各`Trader`の`trade()`を呼ぶ形にして、呼び出し側が2つの平行なVecを手作業で組み立てる必要をなくした)、それに伴い`test_simulate`も簡略化。複数ラウンドを回す`run_round(traders, n_rounds, aggressive)`を実装し、ブレース対応崩れや「買い手/売り手で参加条件が逆」「参加条件チェックが漏れて全員に`allocate`が適用される」といったバグを順に修正。並行して`adjust`を「成立時は何もしない(控えめ)」、`adjust_aggressive`を「成立時は`threshold`を`true_value`から離す(積極的)」の2つに分離。使い捨てテストで両方を15ラウンド動かして比較した結果、**控えめ版は数ラウンドで`threshold`が固定値に収束**するのに対し、**積極版は2状態を永遠に振動して収束しない**ことを確認。これは「清算価格が全員共通のこの市場では、成立時に強気に出ても得る価格は変わらず、不参加リスクだけ増える」という設計上の性質を裏付ける結果で、11章の考察材料になる
 - 2026-08-21: シミュレーション結果をグラフ化。`run_round`の出力をCSV形式(`round,trader,threshold,price,traded`、`#`始まりの行はコメント)に直し、`Trader::new`を`pub`化して新規`src/bin/simulate_demo.rs`(戦略・ラウンド数をCLI引数で指定して実行できる)を追加。Python側は`uv`でプロジェクトを作り`matplotlib`/`pandas`を導入、`pandas.groupby("trader")`でトレーダーごとにグループ化してループで折れ線を描く形を実装(`enumerate`でのタプルのアンパック数のズレなど小さいバグを解消)。結果、**Passive戦略は数ラウンドでthresholdが横ばいに収束、Aggressive戦略は15ラウンド経っても全員がジグザグに振動し続ける**ことがグラフでも視覚的に確認できた。11章のレポート用の図として使える見込み
+- 2026-08-21: 11章のAI連携本体(実際のAPI連携)に着手。`src/ai_agent.rs`に`BuyerProfile`/`SupplierProfile`(在庫・使用ペース・発注履歴・社内方針の価格上限/下限・特記事項)を定義し、`lib.rs`に`pub mod ai_agent;`を登録。APIキー管理用に`mpc-rust/.env.example`と`.gitignore`への`.env`追加も実施(履歴・trackingとも漏洩なしを確認)。`send_for_agent`関数の設計に入ったところで、「この分離は構造的な安全策であって暗号学的証明ではない(spec §11.6が明記する通り)」という点をユーザーと確認し、**11章のAI連携本体(本物のAPI呼び出し・人間確認フロー)を一旦保留し、FHE(第2段階)を優先する**方針に転換。判断理由は、CLAUDE.mdが明記する「MPC⇔FHE比較が最終的なアウトプットの核」という位置づけと、11章が仕様書上も「オプション機能」であること、AI連携部分がcrypto的な証明を伴わないこと。11章のシミュレーション部分(本物の秘密分散を使用)は既に差別化の役目を十分果たしていると判断。`ai_agent.rs`の実装は中断状態のまま保持し、後で再開可能。次回はFHE(第2段階、Solidity+TypeScript+`@zama-fhe/relayer-sdk`)に着手
+- 2026-08-21: ユーザーが共有したZama公式のダークマーケット記事(`tfhe-rs`でのボリュームマッチング実装、本プロジェクトとほぼ同一テーマ)をきっかけに、第2段階の技術選定を再検討。当初のfhEVM(Solidity+TypeScript)は、Zamaのしきい値復号KMS(13ノード)を利用できる利点があるが、残りのコース期間で2つの新言語を0から学ぶコストとリスクが大きいと判断。`tfhe-rs`(Rust)なら既存のRust力を活かせ、しかも公式のほぼ同テーマの実装例があるため、こちらを採用することに決定。トレードオフ(オンチェーン性・KMSの恩恵を失う、復号鍵の扱いは第1段階の3ノード加法的分散同様に簡略化)を明記した上で、CLAUDE.md(技術選定の理由・ディレクトリ構成・2段階構成の表)とspec_v0.4.md(15章制限事項)を更新。次回はここから: `fhe-rust/`ディレクトリの新設、`tfhe-rs`の導入(Cargo.tomlへの追加)、まずは単純な暗号化・準同型加算の動作確認から着手
