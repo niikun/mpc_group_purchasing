@@ -12,7 +12,7 @@ pub struct Trader{
 }
 
 impl Trader{
-    fn new(is_buyer:bool, true_value:u64, threshold:u64,quantity:u64)->Trader{
+    pub fn new(is_buyer:bool, true_value:u64, threshold:u64,quantity:u64)->Trader{
         Trader{
             is_buyer:is_buyer,
             true_value: true_value,
@@ -20,22 +20,63 @@ impl Trader{
             quantity:quantity
         }
     }
-
+    // ３nodeへのshareの分割とBranchの作成
     pub fn trade(self)-> ([[Fp;9];3], Branch){
         set_share_for_send(self.threshold,self.quantity, self.is_buyer)
     }
+    // 利益を計算する
+    pub fn profit(self, price:u64, quantity:u64)->i64{
+        if self.is_buyer{
+            (self.true_value as i64 - price as i64) * quantity as i64
+        } else {
+            (price as i64 - self.true_value as i64) * quantity as i64
+        }
+    }
+    // 適応ルール1　成立したら、変更なし。不成立だったら、成立するためにtrue valueにthresholdを近づける
+    fn adjust(&mut self,traded:bool){
+        if self.is_buyer{
+            if !traded {
+                let price_delta = self.true_value - self.threshold;
+                self.threshold += price_delta/2;
+            } 
+        } else {
+            if !traded {
+                let price_delta = self.threshold - self.true_value;
+                self.threshold -= price_delta/2
+            }
+        }
+    }
+    // 適応ルール2　成立したら、条件を5円修正。不成立だったら、成立するためにtrue valueにthresholdを近づける
+    fn adjust_aggressive(&mut self,traded:bool){
+        if self.is_buyer{
+            if !traded {
+                let price_delta = self.true_value - self.threshold;
+                self.threshold += price_delta/2;
+            } else {
+                self.threshold -= 5;
+            }
+        } else {
+            if !traded {
+                let price_delta = self.threshold - self.true_value;
+                self.threshold -= price_delta/2
+            } else {
+                self.threshold += 5;
+            }
+        }
+    }
 }
 
-pub fn round(all_shares:Vec::<[[Fp;9];3]>, branches:Vec::<Branch>)->Option<(u64,u64,u64,u64)>{
+pub fn round(traders:&[Trader])->Option<(u64,u64,u64,u64)>{
      //3nodeの立ち上げ 
     let mut node_a = Node::new();
     let mut node_b = Node::new();
     let mut node_c = Node::new();
     // shareを各nodeに追加
-    for (shares, branch) in all_shares.iter().zip(branches.iter()){
-        node_a = node_a.add_share(shares[0], *branch);
-        node_b = node_b.add_share(shares[1], *branch);
-        node_c = node_c.add_share(shares[2], *branch);
+    for trader in traders{
+        let (shares, branch) = trader.trade();
+        node_a = node_a.add_share(shares[0], branch);
+        node_b = node_b.add_share(shares[1], branch);
+        node_c = node_c.add_share(shares[2], branch);
     }
     // node_a,node_b,node_cを合体
     let total_node = Node::add_node(node_a, node_b, node_c);
@@ -50,6 +91,40 @@ pub fn round(all_shares:Vec::<[[Fp;9];3]>, branches:Vec::<Branch>)->Option<(u64,
             return Some((price, quantity, total_demand, total_supply));
         },
         None => {return None;}
+    }
+}
+
+pub fn run_round(traders: &mut Vec<Trader>, n_rounds:usize,aggressive:bool){
+    for round_num in 0..n_rounds {
+        let mut trade_quantities = Vec::new();
+        let mut is_trades = Vec::new();
+        if let Some((price, quantity, total_demand, total_supply)) = round(traders){
+            println!("# price: {}, quantity: {}",price,quantity);
+            for (i, trader) in traders.iter_mut().enumerate(){
+                let mut is_trade = false;
+                let mut trade_quantity = 0;
+                if trader.is_buyer {
+                    if price <= trader.threshold{
+                        trade_quantity =  allocate(trader.quantity, total_demand, quantity);
+                    }
+                } else { 
+                    if price >= trader.threshold{
+                        trade_quantity = allocate(trader.quantity, total_supply, quantity);
+                    }
+                } 
+                if trade_quantity > 0{
+                        is_trade = true;
+                }
+                trade_quantities.push(trade_quantity);
+                is_trades.push(is_trade);
+                if aggressive{
+                    trader.adjust_aggressive(is_trade);
+                } else {
+                    trader.adjust(is_trade);
+                }
+                println!("{}, {}, {}, {}, {}",round_num, i+1, trader.threshold, price, is_trade);
+            }
+        }
     }
 }
 
@@ -83,17 +158,9 @@ mod tests{
         let trader_s1 = Trader::new(false, 90, threshold_s1,400);
         let trader_s2 = Trader::new(false, 100, threshold_s2,500);
 
-        let (shares_b1, branch_b1) = trader_b1.trade();
-        let (shares_b2, branch_b2) = trader_b2.trade();
-        let (shares_b3, branch_b3) = trader_b3.trade();
-        let (shares_s1, branch_s1) = trader_s1.trade();
-        let (shares_s2, branch_s2) = trader_s2.trade();
-
-        let all_shares = Vec::from([shares_b1,shares_b2,shares_b3,shares_s1,shares_s2]);
-        let branches = Vec::from([branch_b1,branch_b2,branch_b3,branch_s1,branch_s2]);
-
- 
-        let (price, quantity, total_demmand, total_supply) = round(all_shares,branches).unwrap();
+        let traders = Vec::from([trader_b1, trader_b2, trader_b3, trader_s1, trader_s2]);
+         
+        let (price, quantity, total_demmand, total_supply) = round(&traders).unwrap();
 
         // Buyer: 参加条件は price <= threshold、分母は total_demmand(需要側)
         let b1_trade = if price <= threshold_b1 { allocate(quantity_b1, total_demmand, quantity) } else { 0 };
@@ -112,5 +179,52 @@ mod tests{
         assert_eq!(s2_trade,500*600/900);
     }
 
+    #[test]
+    fn test_profit(){
+        let trader1 = Trader::new(true,100,100,100);
+        let trader2 = Trader::new(false,100,100,100);
 
+        let price1 = 200u64;
+        let price2 = 90u64;
+        let quantity1 = 1000u64;
+        let quantity2 = 0u64;
+
+        assert_eq!(trader1.profit(price2, quantity1), 10_000i64);
+        assert_eq!(trader2.profit(price1, quantity1), 100_000i64);
+        assert_eq!(trader2.profit(price2, quantity1), -10_000i64);
+        assert_eq!(trader1.profit(price1, quantity2), 0i64);
+    }
+    #[test]
+    fn test_adjust_aggressive(){
+        let mut trader1 = Trader::new(true,100,80,100);
+        let mut trader2 = Trader::new(false,100,120,100);
+        let mut trader3 = Trader::new(true,100,80,100);
+        let mut trader4 = Trader::new(false,100,120,100);
+
+        trader1.adjust_aggressive(true);
+        assert_eq!(trader1.threshold,75);
+        trader2.adjust_aggressive(true);
+        assert_eq!(trader2.threshold,125);
+        trader3.adjust_aggressive(false);
+        assert_eq!(trader3.threshold,90);
+        trader4.adjust_aggressive(false);
+        assert_eq!(trader4.threshold,110);
+    }
+
+    #[test]
+    fn test_adjust(){
+        let mut trader1 = Trader::new(true,100,80,100);
+        let mut trader2 = Trader::new(false,100,120,100);
+        let mut trader3 = Trader::new(true,100,80,100);
+        let mut trader4 = Trader::new(false,100,120,100);
+
+        trader1.adjust(true);
+        assert_eq!(trader1.threshold,80);
+        trader2.adjust(true);
+        assert_eq!(trader2.threshold,120);
+        trader3.adjust(false);
+        assert_eq!(trader3.threshold,90);
+        trader4.adjust(false);
+        assert_eq!(trader4.threshold,110);
+    }
 }
