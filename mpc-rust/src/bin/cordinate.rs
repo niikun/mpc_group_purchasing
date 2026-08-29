@@ -1,14 +1,11 @@
 // use std::env;
 use tokio::io::BufReader;
-
 use tokio::net::TcpStream;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
-// use serde::{Serialize, Deserialize};
 
-// use mpc_rust::secret_sharing::Fp;
 use mpc_rust::node::Node;
 use mpc_rust::auction::{PriceQuantity, clearing_price};
-// use tokio::net::tcp::OwnedReadHalf;
+
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
