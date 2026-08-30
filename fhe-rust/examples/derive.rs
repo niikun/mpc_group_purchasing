@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use tfhe::{ClientKey, ConfigBuilder, FheUint16, generate_keys, set_server_key, FheBool};
+use tfhe::{ClientKey, ConfigBuilder, FheUint16, FheUint32, generate_keys, set_server_key, FheBool};
 use tfhe::prelude::*;
 
 pub const PRICES: [u16; 9] = [95u16,100u16,105u16,110u16,115u16,120u16,125u16,130u16,135u16];
@@ -55,15 +55,32 @@ fn fhe_aggregate(
     (demands, supplys)
 }
 
+fn fhe_allocate(
+    desired:&FheUint16, //自社の希望量
+    total: & FheUint16,  //buyerならD sellerならS
+    traded: &FheUint16,  //成立総量 D
+    zero32: &FheUint32,  //32bit の暗号ゼロ
+) -> FheUint32 {
+    let desired32 = FheUint32::cast_from(desired.clone());
+    let total32  = FheUint32::cast_from(total.clone());
+    let traded32 = FheUint32::cast_from(traded.clone());
+    let numerator = &traded32 * &desired32;
+    let quantity = numerator / total32;
+    let cond = total.ne(0);
+    let result = cond.if_then_else(&quantity, zero32);
+    result
+}
+
 fn fhe_clearing_price(
     demands: &[FheUint16; 9],
     supplys: &[FheUint16; 9],
     prices_enc: &[FheUint16; 9],  // PRICES を暗号化したもの
     zero: &FheUint16,
     enc_false: &FheBool,          // 暗号化した false
-) -> (FheBool, FheUint16, FheUint16) {     // (トレードしたか,清算価格, 約定量) どちらも暗号のまま
+) -> (FheBool, FheUint16, FheUint16, FheUint16) {     // (トレードしたか,清算価格, 約定時のデマンド量, 約定時のサプライ量) どちらも暗号のまま
     let mut price    = zero.clone();
-    let mut quantity = zero.clone();
+    let mut demand_at_clearing = zero.clone();
+    let mut supply_at_clearing = zero.clone();
     let mut found    = enc_false.clone();
     let mut total_demand = zero.clone();
     let mut total_supply = zero.clone();
@@ -78,7 +95,8 @@ fn fhe_clearing_price(
 
         // pick_i が true のバンドだけ反映(他は zero を足す = 何もしない)
         price    += pick_i.if_then_else(&prices_enc[i], zero);
-        quantity += pick_i.if_then_else(&demands[i],    zero);
+        demand_at_clearing += pick_i.if_then_else(&demands[i], zero);
+        supply_at_clearing += pick_i.if_then_else(&supplys[i], zero);
 
         // ラッチ更新:一度 true になったら戻らない
         found = &found | &le_i;
@@ -86,12 +104,14 @@ fn fhe_clearing_price(
     let has_demand = total_demand.ne(0);
     let has_supply = total_supply.ne(0);
     let is_trade = has_demand & has_supply & found;
-    (is_trade, price, quantity)
+    (is_trade, price, demand_at_clearing, supply_at_clearing)
 }
 
 
 #[cfg(test)]
 mod tests{
+use tfhe::array::ClearSliceMut;
+
 use super::*;
     #[test]
     fn test_aggrigate(){
@@ -173,11 +193,13 @@ use super::*;
         let s1_enc: [FheUint16; 9] = core::array::from_fn(|i| FheUint16::encrypt(s1[i], &client_key));
 
         let t = Instant::now();
-        let (is_trade, p, q) = fhe_clearing_price(&d_enc, &s1_enc, &prices_enc, &zero, &enc_false);
+        let (is_trade, p, q,s) = fhe_clearing_price(&d_enc, &s1_enc, &prices_enc, &zero, &enc_false);
         println!("fhe_clearing_price: {:?}", t.elapsed());
         let p: u16 = p.decrypt(&client_key);
         let q: u16 = q.decrypt(&client_key);
+        let is_trade = is_trade.decrypt(&client_key);
         assert_eq!((p, q), (120, 50));
+        assert_eq!(is_trade, true);
     }
 
     #[test]
@@ -196,9 +218,34 @@ use super::*;
         let s1_enc: [FheUint16; 9] = core::array::from_fn(|i| FheUint16::encrypt(s1[i], &client_key));
 
         let t = Instant::now();
-        let (is_trade, p, q) = fhe_clearing_price(&d_enc, &s1_enc, &prices_enc, &zero, &enc_false);
+        let (is_trade, p, q,s) = fhe_clearing_price(&d_enc, &s1_enc, &prices_enc, &zero, &enc_false);
         println!("fhe_clearing_price: {:?}", t.elapsed());
         let clear_is_trade: bool = is_trade.decrypt(&client_key);
         assert_eq!(clear_is_trade,false);
     }
+
+    #[test]
+    fn test_allocate(){
+        let desired = 50u16;
+        let total = 100u16;
+        let traded = 20u16;
+        let qty = 20 * 50 / 100;
+        let t = Instant::now();
+        let config = ConfigBuilder::default().build();
+        let (client_key, server_key) = generate_keys(config);
+        set_server_key(server_key);
+        println!("set up:{:?}", t.elapsed());
+        let t = Instant::now();
+        let desired_fhe16 = FheUint16::encrypt(desired, &client_key);
+        let total_fhe16 = FheUint16::encrypt(total, &client_key);
+        let traded_fhe16 = FheUint16::encrypt(traded, &client_key);
+        let zero32 = FheUint32::encrypt(0u32, &client_key);
+        println!("encrypt:{:?}", t.elapsed());
+        let t = Instant::now();
+        let quantity = fhe_allocate(&desired_fhe16, &total_fhe16, &traded_fhe16, &zero32);
+        println!("fhe allocate: {:?}", t.elapsed());
+        let clear_quantity:u32 = quantity.decrypt(&client_key);
+        assert_eq!(clear_quantity, qty);
+    }
+
 }
