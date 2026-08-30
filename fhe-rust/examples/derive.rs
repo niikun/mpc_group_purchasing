@@ -40,20 +40,51 @@ pub fn fhe_derive(
 fn fhe_aggregate(
     participants:&[(FheUint16, FheUint16, bool)], zero: &FheUint16
 ) -> ([FheUint16;9], [FheUint16;9]){
-    let mut demand:[FheUint16;9] = core::array::from_fn(|_| zero.clone());
-    let mut supply:[FheUint16;9] = core::array::from_fn(|_| zero.clone());
+    let mut demands:[FheUint16;9] = core::array::from_fn(|_| zero.clone());
+    let mut supplys:[FheUint16;9] = core::array::from_fn(|_| zero.clone());
 
     for participant in participants{
         let (threshold, quantity, is_buyer) = participant;
         let price_quantity = fhe_derive(threshold,quantity,*is_buyer,zero);
         if *is_buyer {
-            for i in 0..9 {demand[i] += &price_quantity[i];}
+            for i in 0..9 {demands[i] += &price_quantity[i];}
         } else {
-            for i in 0..9 { supply[i] += &price_quantity[i];}
+            for i in 0..9 { supplys[i] += &price_quantity[i];}
         }
     }
-    (demand, supply)
+    (demands, supplys)
 }
+
+fn fhe_clearing_price(
+    demands: &[FheUint16; 9],
+    supplys: &[FheUint16; 9],
+    prices_enc: &[FheUint16; 9],  // PRICES を暗号化したもの
+    zero: &FheUint16,
+    enc_false: &FheBool,          // 暗号化した false
+) -> (FheUint16, FheUint16) {     // (清算価格, 約定量) どちらも暗号のまま
+    let mut price    = zero.clone();
+    let mut quantity = zero.clone();
+    let mut found    = enc_false.clone();
+
+    for i in 0..9 {
+        // このバンドで D(p) <= S(p) か
+        let le_i: FheBool = demands[i].le(&supplys[i]);
+
+        // 「条件成立」かつ「まだ見つけてない」= ここが最初の成立バンド
+        let not_found: FheBool = !&found;
+        let pick_i: FheBool = &le_i & &not_found;
+
+        // pick_i が true のバンドだけ反映(他は zero を足す = 何もしない)
+        price    += pick_i.if_then_else(&prices_enc[i], zero);
+        quantity += pick_i.if_then_else(&demands[i],    zero);
+
+        // ラッチ更新:一度 true になったら戻らない
+        found = &found | &le_i;
+    }
+
+    (price, quantity)
+}
+
 
 #[cfg(test)]
 mod tests{
@@ -120,5 +151,28 @@ use super::*;
         let clear_quantity:u16 = crypted_quantity.decrypt(&client_key);
         assert_eq!(clear_threshold, threshold);
         assert_eq!(clear_quantity, quantity);
+    }
+
+    #[test]
+    fn test_fhe_clearing_price() {
+        let config = ConfigBuilder::default().build();
+        let (client_key, server_key) = generate_keys(config);
+        set_server_key(server_key);
+
+        let zero = FheUint16::encrypt(0u16, &client_key);
+        let enc_false = FheBool::encrypt(false, &client_key);
+        let prices_enc: [FheUint16; 9] = core::array::from_fn(|i| FheUint16::encrypt(PRICES[i], &client_key));
+
+        let d  = [100u16,90,80,70,60,50,40,30,20];
+        let s1 = [10u16,20,30,40,50,60,70,80,90];   // i=5 で初成立 → price 120, qty 50
+        let d_enc:  [FheUint16; 9] = core::array::from_fn(|i| FheUint16::encrypt(d[i],  &client_key));
+        let s1_enc: [FheUint16; 9] = core::array::from_fn(|i| FheUint16::encrypt(s1[i], &client_key));
+
+        let t = Instant::now();
+        let (p, q) = fhe_clearing_price(&d_enc, &s1_enc, &prices_enc, &zero, &enc_false);
+        println!("fhe_clearing_price: {:?}", t.elapsed());
+        let p: u16 = p.decrypt(&client_key);
+        let q: u16 = q.decrypt(&client_key);
+        assert_eq!((p, q), (120, 50));
     }
 }
