@@ -5,10 +5,117 @@ use tfhe::prelude::*;
 
 pub const PRICES: [u16; 9] = [95u16,100u16,105u16,110u16,115u16,120u16,125u16,130u16,135u16];
 
-pub fn main(){
+// FHE ベンチハーネス
+//   buyer3 + seller2 の「1取引」= fhe_aggregate → fhe_clearing_price → fhe_allocate x5社
+//   を RUNS 回まわし、先頭 1 回(ウォームアップ)を捨てて中央値/最小/最大を出す。
+//   フェーズ別(aggregate / clearing / allocate)も個別に計測する。
+//
+//   実行: RUSTFLAGS="-C target-cpu=native" cargo run --release --example derive
+//   鍵生成・入力暗号化・復号はタイミング区間の外(別枠)。
+pub fn main() {
+    use std::time::Duration;
+
     let config = ConfigBuilder::default().build();
-    let  (client_key, server_key) = generate_keys(config);
+    let t = Instant::now();
+    let (client_key, server_key) = generate_keys(config);
     set_server_key(server_key);
+    println!("keygen: {:?}", t.elapsed());
+
+    // 定数(区間外)
+    let zero = FheUint16::encrypt(0u16, &client_key);
+    let zero32 = FheUint32::encrypt(0u32, &client_key);
+    let enc_false = FheBool::encrypt(false, &client_key);
+    let prices_enc: [FheUint16; 9] =
+        core::array::from_fn(|i| FheUint16::encrypt(PRICES[i], &client_key));
+
+    // 固定シナリオ = mpc-rust の test_aggrigate_market3 と同じ (threshold, quantity, is_buyer)
+    // 期待: 清算価格 110
+    let scenario: [(u16, u16, bool); 5] = [
+        (110, 200, true),
+        (120, 100, true),
+        (95, 100, true),
+        (110, 200, false),
+        (100, 200, false),
+    ];
+    let t = Instant::now();
+    let participants: Vec<(FheUint16, FheUint16, bool)> = scenario
+        .iter()
+        .map(|&(th, q, b)| {
+            (
+                FheUint16::encrypt(th, &client_key),
+                FheUint16::encrypt(q, &client_key),
+                b,
+            )
+        })
+        .collect();
+    println!("encrypt inputs (5社 x 2値): {:?}", t.elapsed());
+
+    const RUNS: usize = 5; // 先頭を捨てる → 有効サンプル 4
+
+    let (mut whole, mut agg, mut clr, mut alo) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+
+    for i in 0..RUNS {
+        let t_whole = Instant::now();
+
+        let t = Instant::now();
+        let (demand, supply) = fhe_aggregate(&participants, &zero);
+        let dur_agg = t.elapsed();
+
+        let t = Instant::now();
+        let (is_trade, price, dem_clr, sup_clr) =
+            fhe_clearing_price(&demand, &supply, &prices_enc, &zero, &enc_false);
+        let dur_clr = t.elapsed();
+
+        let t = Instant::now();
+        let mut allocs = Vec::with_capacity(5);
+        for p in &participants {
+            let total = if p.2 { &dem_clr } else { &sup_clr };
+            allocs.push(fhe_allocate(&p.1, total, &dem_clr, &zero32));
+        }
+        let dur_alo = t.elapsed();
+
+        let dur_whole = t_whole.elapsed();
+        eprintln!(
+            "run {i}: whole={dur_whole:?}  (aggregate={dur_agg:?}  clearing={dur_clr:?}  allocate x5={dur_alo:?})"
+        );
+
+        if i == 0 {
+            // 正しさの目視確認(清算価格が MPC と一致するか)
+            let it: bool = is_trade.decrypt(&client_key);
+            let pr: u16 = price.decrypt(&client_key);
+            let dc: u16 = dem_clr.decrypt(&client_key);
+            let sc: u16 = sup_clr.decrypt(&client_key);
+            println!(
+                "sanity: is_trade={it}  price={pr}  demand@clearing={dc}  supply@clearing={sc}  (MPC 期待: price=110)"
+            );
+            let a: Vec<u32> = allocs.iter().map(|x| x.decrypt(&client_key)).collect();
+            println!("  raw fhe_allocate (参加ゲート未実装, b3 は本来 0): {a:?}");
+        } else {
+            whole.push(dur_whole);
+            agg.push(dur_agg);
+            clr.push(dur_clr);
+            alo.push(dur_alo);
+        }
+    }
+
+    fn stats(label: &str, mut v: Vec<Duration>) {
+        v.sort();
+        let n = v.len();
+        println!(
+            "{label}: median={:?}  min={:?}  max={:?}  (n={n})",
+            v[n / 2],
+            v[0],
+            v[n - 1]
+        );
+    }
+
+    println!("--- FHE 1取引 (buyer3 + seller2) ---");
+    println!("threads available: {:?}", std::thread::available_parallelism());
+    stats("aggregate (D/S 構築, fhe_derive 込み)", agg);
+    stats("clearing scan (9 バンド)", clr);
+    stats("allocate x5 社", alo);
+    stats("whole trade", whole);
 }
 
 pub fn cordinator(threshold:u16, quantity:u16, client_key:&ClientKey)->(FheUint16,FheUint16){
