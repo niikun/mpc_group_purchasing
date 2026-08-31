@@ -1,6 +1,10 @@
 use reqwest;
 use serde::{Serialize, Deserialize};
+use serde_json::{json, Value};
+
 use std::collections::HashMap;
+const API_URL:&str = "https://api.anthropic.com/v1/messages";
+const MODEL:&str = "claude-haiku-4-5";
 
 pub struct BuyerProfile{
     current_stock:u64,
@@ -32,8 +36,30 @@ pub struct SupplyRecord{
     supply_amount:u64, 
 }
 
-#[tokio::main]
-pub async fn send_for_agent() -> std::io::Result<()>{
 
-    Ok(())
+
+pub async fn call_claude(prompt:&str) -> Result<String, Box<dyn std::error::Error>>{
+    dotenvy::dotenv().ok();
+    let api_key = std::env::var("ANTHROPIC_API_KEY")?;
+    let client = reqwest::Client::new();
+    let message = json!({
+        "model":MODEL,
+        "max_tokens":256,
+        "messages": [{ "role": "user", "content": prompt }] 
+    });
+    let response :Value = client
+        .post(API_URL)
+        .header("x-api-key", api_key)
+        .header("anthropic-version", "2023-06-01")
+        .json(&message)
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<Value>()
+        .await?;
+    let text = response["content"][0]["text"]
+                .as_str()
+                .ok_or("responseにtextブロックがない")?
+                .to_string();
+    Ok(text)
 }
