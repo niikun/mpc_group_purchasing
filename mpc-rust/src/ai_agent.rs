@@ -13,6 +13,14 @@ enum Profile{
     Supplier(SupplierProfile),
 }
 
+#[derive(Debug)]
+pub enum BidError{
+    NotOnGrid(u64),
+    QuantityExceedsMax(u64,u64),
+    QuantityZero,
+    PolicyViolation,
+} 
+
 #[derive(Debug, Clone)]
 pub struct BuyerProfile{
     pub strategy:String,
@@ -177,6 +185,37 @@ pub fn parse_bid(text:&str)->Result<Bid, Box<dyn std::error::Error>>{
         let target_text = &text[start..=end];
         let bid:Bid = serde_json::from_str(target_text)?;
         Ok(bid)
+}
+
+pub fn validate_bid(bid:&Bid, profile:&Profile) -> Result<Bid, BidError>{
+    match profile {
+        Profile::Buyer(buyer_profile)=>{
+            if !PRICES.contains(&bid.threshold){
+                Err(BidError::NotOnGrid(bid.threshold))
+            } else if bid.quantity == 0{
+                Err(BidError::QuantityZero)
+            } else if bid.threshold > buyer_profile.price_ceiling{
+                Err(BidError::PolicyViolation)
+            } else if bid.quantity > buyer_profile.max_stock - buyer_profile.current_stock{
+                Err(BidError::QuantityExceedsMax(bid.quantity, buyer_profile.max_stock - buyer_profile.current_stock))
+            } else {
+                Ok(bid.clone())
+            }
+        },
+        Profile::Supplier(supplier_profile ) =>{
+            if !PRICES.contains(&bid.threshold){
+                Err(BidError::NotOnGrid(bid.threshold))
+            } else if bid.quantity == 0{
+                Err(BidError::QuantityZero)
+            } else if bid.threshold < supplier_profile.price_floor{
+                Err(BidError::PolicyViolation)
+            } else if bid.quantity > (supplier_profile.current_stock - supplier_profile.safety_stock){
+                Err(BidError::QuantityExceedsMax(bid.quantity, supplier_profile.max_stock - supplier_profile.current_stock))
+            } else {
+                Ok(bid.clone())
+            }
+        }
+    }
 }
 
 pub async fn propose_bid(profile:&Profile) -> Result<Bid, Box<dyn std::error::Error>>{
