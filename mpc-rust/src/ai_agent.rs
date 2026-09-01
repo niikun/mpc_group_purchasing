@@ -210,7 +210,7 @@ pub fn validate_bid(bid:&Bid, profile:&Profile) -> Result<Bid, BidError>{
             } else if bid.threshold < supplier_profile.price_floor{
                 Err(BidError::PolicyViolation)
             } else if bid.quantity > (supplier_profile.current_stock - supplier_profile.safety_stock){
-                Err(BidError::QuantityExceedsMax(bid.quantity, supplier_profile.max_stock - supplier_profile.current_stock))
+                Err(BidError::QuantityExceedsMax(bid.quantity, supplier_profile.current_stock - supplier_profile.safety_stock))
             } else {
                 Ok(bid.clone())
             }
