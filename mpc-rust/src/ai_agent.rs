@@ -7,6 +7,12 @@ use crate::auction::PRICES;
 
 const API_URL:&str = "https://api.anthropic.com/v1/messages";
 const MODEL:&str = "claude-haiku-4-5";
+
+enum Profile{
+    Buyer(BuyerProfile),
+    Supplier(SupplierProfile),
+}
+
 #[derive(Debug, Clone)]
 pub struct BuyerProfile{
     pub strategy:String,
@@ -124,7 +130,7 @@ fn build_supplier_prompt(profile:&SupplierProfile)->String{
         ### 会社の状況
         現在のストック量(単位:l): {current_stock}
         1日の供給量(単位:l): {supply_per_day},
-        安全在庫(単位:l):{safty_stock},
+        安全在庫(単位:l):{safety_stock},
         最大在庫量(単位:l):{max_stock},
         過去の販売履歴:{supply_history},
         販売価格下限(単位:円):{price_floor}
@@ -169,10 +175,26 @@ pub fn parse_bid(text:&str)->Result<Bid, Box<dyn std::error::Error>>{
         let start = text.find('{').unwrap();
         let end = text.rfind('}').unwrap();
         let target_text = &text[start..=end];
-        OK(target_text)
+        let bid:Bid = serde_json::from_str(target_text)?;
+        Ok(bid)
 }
 
-pub fn propose
+pub async fn propose_bid(profile:&Profile) -> Result<Bid, Box<dyn std::error::Error>>{
+    match profile {
+        Profile::Buyer(buyer_profile) =>{
+            let prompt = build_buyer_prompt(&buyer_profile);
+            let text = call_claude(&prompt).await.unwrap();
+            let bid = parse_bid(&text)?;
+            Ok(bid)
+        },
+        Profile::Supplier(supplier_profile) =>{
+            let prompt = build_supplier_prompt(&supplier_profile);
+            let text = call_claude(&prompt).await.unwrap();
+            let bid = parse_bid(&text)?;
+            Ok(bid)
+        }        
+    }
+}
 
 #[cfg(test)]
 mod tests{
