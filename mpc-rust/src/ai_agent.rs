@@ -37,8 +37,10 @@ impl BuyerProfile{
 #[derive(Debug, Clone)]
 pub struct OrderRecord{
     pub date:String,
-    order_amount:u64, 
+    pub order_amount:u64, 
 }
+
+
 
 #[derive(Debug, Clone)]
 pub struct SupplierProfile{
@@ -56,6 +58,13 @@ pub struct SupplierProfile{
 pub struct SupplyRecord{
     pub date:String,
     pub supply_amount:u64, 
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Bid{
+    pub threshold: u64,
+    pub quantity:u64,
+    pub reason:String,
 }
 
 fn build_buyer_prompt(profile:&BuyerProfile)->String{
@@ -120,23 +129,48 @@ pub async fn call_claude(prompt:&str) -> Result<String, Box<dyn std::error::Erro
     Ok(text)
 }
 
+pub fn parse_bid(text:&str)->Result<Bid, Box<dyn std::error::Error>>{
+    Ok(serde_json::from_str(text)?)
+}
+
 #[cfg(test)]
 mod tests{
-    use super::*;
+    use crate::node::Branch::Buyer;
+
+use super::*;
 
     #[test]
-    fn print_build_buyer_prompt(){
+    fn test_parse_bid(){
+        let text = r#"{"threshold":100,"quantity":200,"reason":"在庫が薄いため"}"#;
+        let bid = parse_bid(text).unwrap();
+        assert_eq!(bid.threshold, 100);
+    }
+
+  
+    #[tokio::test]
+    #[ignore]
+    async fn test_build_call_parse(){
         let p = BuyerProfile::new(
-            "在庫を切らさないようにする".to_string(),
-            100,
-            10,
-            20,
-            200,
-            vec![],
-            150,
-            "特記事項なし".to_string()
+        "在庫を切らさず、なるべく安く仕入れる".to_string(),
+        800,    // current_stock: 現在庫 800L
+        120,    // use_per_day: 1日120L消費
+        600,    // reorder_point: 600Lを切ったら発注
+        2000,   // max_stock: タンク上限 2000L
+        vec![
+            OrderRecord { date: "2026-07-15".to_string(), order_amount: 1000 },
+            OrderRecord { date: "2026-08-12".to_string(), order_amount: 800 },
+        ],
+        120,    // price_ceiling: 社内方針で120まで
+        "梅雨明けで揚げ物需要が増加見込み".to_string(),
         );
+        
         let prompt = build_buyer_prompt(&p);
-        println!("{}",prompt);
+        let text = call_claude(&prompt).await.unwrap();
+        let start = text.find('{').unwrap();
+        let end = text.rfind('}').unwrap();
+        let target_text = &text[start..=end];
+        println!("raw: {:?}", target_text);
+        let bid = parse_bid(&target_text).unwrap();
+        println!("{:?}", bid);
     }
 }
