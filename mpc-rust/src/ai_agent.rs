@@ -47,11 +47,11 @@ pub struct SupplierProfile{
     pub strategy:String,
     pub current_stock:u64,
     pub supply_per_day:u64,
-    pub reorder_point:u64,
+    pub safety_stock:u64,
     pub max_stock:u64,
     pub supply_history:Vec<SupplyRecord>,
     pub price_floor:u64, // 社内方針: この価格を下回っては売らない、という下限
-    notes:String,    // 特記事項(自由記述)
+    pub notes:String,    // 特記事項(自由記述)
 }
 
 #[derive(Debug, Clone)]
@@ -86,19 +86,55 @@ fn build_buyer_prompt(profile:&BuyerProfile)->String{
         購入する価格は{prices:?}グリッドで決まっています。
         それ以外の価格での購入はできません。
         ### 会社の状況
-        現在のストック量: {current_stock}
-        1日の消費量: {use_per_day},
-        再購入のポイント:{reorder_point},
-        最大材御量:{max_stock},
+        現在のストック量(単位:l): {current_stock}
+        1日の消費量(単位:l): {use_per_day},
+        再発注点(単位:l):{reorder_point},
+        最大在庫量(単位:l):{max_stock},
         過去の購入履歴:{order_history},
-        購入価格上限:{price_ceiling}
+        購入価格上限(単位:円):{price_ceiling}
         特記事項:{notes}
         ### 出力形式
         以下の例のようなjsonのみ。余計な文章は加えないでください。
         {{"threshold":100, "quantity":200, "reason":"在庫に対して、使用量のため..."}}
-        thresholdは購入上限の価格です
-        quantityは購入する数量です
+        thresholdは購入上限の価格です。pricesの中の数字を必ず設定してください。
+        quantityは購入する数量です。max_stock - current_stock を超えない。
         reasonは判断した理由を50字以内で説明してください
+        "#);
+    prompt
+}
+
+fn build_supplier_prompt(profile:&SupplierProfile)->String{
+    let prices = PRICES;
+    let strategy:&String = &profile.strategy;
+    let current_stock:u64 = profile.current_stock;
+    let supply_per_day:u64 = profile.supply_per_day;
+    let safety_stock:u64 = profile.safety_stock;
+    let max_stock:u64 = profile.max_stock;
+    let supply_history:String = profile.supply_history.iter()
+            .map(|o| format!("{}:{}l",o.date,o.supply_amount))
+            .collect::<Vec<_>>()
+            .join(",");
+    let price_floor:u64 = profile.price_floor;
+    let notes:&String = &profile.notes;
+    let prompt = format!(r#"
+        あなたは外食チェーンの食用油の供給者です。
+        目的は、{strategy}ことです。 
+        販売する価格は{prices:?}グリッドで決まっています。
+        それ以外の価格での販売はできません。
+        ### 会社の状況
+        現在のストック量(単位:l): {current_stock}
+        1日の供給量(単位:l): {supply_per_day},
+        安全在庫(単位:l):{safty_stock},
+        最大在庫量(単位:l):{max_stock},
+        過去の販売履歴:{supply_history},
+        販売価格下限(単位:円):{price_floor}
+        特記事項:{notes}
+        ### 出力形式
+        以下の例のようなjsonのみ。余計な文章は加えないでください。
+        {{"threshold":100, "quantity":200, "reason":"在庫に対して、使用量のため..."}}
+        thresholdは販売下限の価格です。pricesの中の数字を必ず設定してください。
+        quantityは販売する数量です。current_stock-safty_stock以下で設定してください。
+        reasonは判断した理由を50字以内で説明してください。
         "#);
     prompt
 }
@@ -130,8 +166,13 @@ pub async fn call_claude(prompt:&str) -> Result<String, Box<dyn std::error::Erro
 }
 
 pub fn parse_bid(text:&str)->Result<Bid, Box<dyn std::error::Error>>{
-    Ok(serde_json::from_str(text)?)
+        let start = text.find('{').unwrap();
+        let end = text.rfind('}').unwrap();
+        let target_text = &text[start..=end];
+        OK(target_text)
 }
+
+pub fn propose
 
 #[cfg(test)]
 mod tests{
