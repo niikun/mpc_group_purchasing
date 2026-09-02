@@ -12,7 +12,7 @@ pub enum Profile{
     Supplier(SupplierProfile),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum BidError{
     NotOnGrid(u64),
     QuantityExceedsMax(u64,u64),
@@ -73,7 +73,7 @@ pub struct SupplyRecord{
     pub supply_amount:u64, 
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct Bid{
     pub threshold: u64,
     pub quantity:u64,
@@ -239,6 +239,36 @@ mod tests{
     use crate::node::Branch::Buyer;
 
 use super::*;
+    #[test]
+    fn test_validate_bid(){
+        let bid1 = Bid{threshold:100, quantity:200, reason:"在庫が薄いため".to_string()};
+        let bid2 = Bid{threshold:101, quantity:200, reason:"在庫が薄いため".to_string()};
+        let bid3 = Bid{threshold:100, quantity:3000, reason:"在庫が薄いため".to_string()};
+        let bid4 = Bid{threshold:100, quantity:0, reason:"在庫が薄いため".to_string()};
+        let buyer_profile = BuyerProfile::new(
+            "在庫を切らさず、なるべく安く仕入れる".to_string(),
+            800,    // current_stock: 現在庫 800L
+            120,    // use_per_day: 1日120L消費
+            600,    // reorder_point: 600Lを切ったら発注
+            2000,   // max_stock: タンク上限 2000L
+            vec![
+                OrderRecord { date: "2026-07-15".to_string(), order_amount: 1000 },
+                OrderRecord { date: "2026-08-12".to_string(), order_amount: 800 },
+            ],
+            120,    // price_ceiling: 社内方針で120まで
+            "梅雨明けで揚げ物需要が増加見込み".to_string(),
+        );
+        let profile = Profile::Buyer(buyer_profile);
+        let result1: Result<Bid, BidError> = validate_bid(&bid1, &profile);
+        let result2 = validate_bid(&bid2, &profile);
+        let result3 = validate_bid(&bid3, &profile);
+        let result4 = validate_bid(&bid4, & profile);
+        assert!(result1.is_ok());
+        assert_eq!(result2, Err(BidError::NotOnGrid(101)));
+        assert_eq!(result3, Err(BidError::QuantityExceedsMax(3000, 1200)));
+        assert_eq!(result4, Err(BidError::QuantityZero));
+    }
+
 
     #[test]
     fn test_parse_bid(){
