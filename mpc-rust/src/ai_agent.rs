@@ -1,14 +1,13 @@
 use reqwest;
-use serde::{Serialize, Deserialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 
-use std::collections::HashMap;
 use crate::auction::PRICES;
 
 const API_URL:&str = "https://api.anthropic.com/v1/messages";
 const MODEL:&str = "claude-haiku-4-5";
 
-enum Profile{
+pub enum Profile{
     Buyer(BuyerProfile),
     Supplier(SupplierProfile),
 }
