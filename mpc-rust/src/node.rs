@@ -87,14 +87,14 @@ mod tests{
         let mut node2 = Node::new();  
         let mut node3 = Node::new();      
         let mut node4 = Node::new();    
-        let mut node5 = Node::new();    
+        // let mut node5 = Node::new();    
 
         let q1 = [Fp::new(10);9];
         let q2 = [Fp::new(20);9];
         node1 = node1.add_share(q1,Branch::Buyer);
         node2 = node2.add_share(q1,Branch::Buyer);
         node3 = node3.add_share(q2,Branch::Buyer);
-        node5 = Node::add_node(node1.clone(),node2.clone(),node3.clone());
+        let mut node5 = Node::add_node(node1.clone(),node2.clone(),node3.clone());
 
         node4 = node4.add_share(q1,Branch::Buyer);
         node4 = node4.add_share(q1,Branch::Buyer);
