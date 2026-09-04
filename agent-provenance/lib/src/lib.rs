@@ -179,22 +179,18 @@ pub fn canonical_bytes(profile: &Profile) -> Vec<u8> {
 
 /// コミットメント = sha256(canonical(profile) ++ salt)
 pub fn commit_profile(profile: &Profile, salt: &[u8; 32]) -> [u8; 32] {
-    // TODO:
-    //   let mut h = Sha256::new();
-    //   h.update(canonical_bytes(profile));
-    //   h.update(salt);
-    //   h.finalize().into()
-    todo!()
+    let mut h = Sha256::new();
+    h.update(canonical_bytes(profile));
+    h.update(salt);
+    h.finalize().into()
 }
 
 /// propose_bid の match と同じ振り分けで prompt を 1 本化する。
 pub fn render_prompt(profile: &Profile, history: &str) -> String {
-    // TODO:
-    //   match profile {
-    //       Profile::Buyer(b) => build_buyer_prompt(b, history),
-    //       Profile::Supplier(s) => build_supplier_prompt(s, history),
-    //   }
-    todo!()
+    match profile {
+        Profile::Buyer(b) => build_buyer_prompt(b, history),
+        Profile::Supplier(s) => build_supplier_prompt(s, history),
+    }
 }
 
 /// sha256 ヘルパー(guest / host 共用)
