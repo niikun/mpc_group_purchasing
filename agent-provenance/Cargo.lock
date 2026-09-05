@@ -29,6 +29,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "agent-provenance-lib"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "serde",
+ "sha2",
+]
+
+[[package]]
+name = "agent-provenance-program"
+version = "0.1.0"
+dependencies = [
+ "agent-provenance-lib",
+ "sp1-zkvm",
+]
+
+[[package]]
+name = "agent-provenance-script"
+version = "0.1.0"
+dependencies = [
+ "agent-provenance-lib",
+ "clap",
+ "dotenv",
+ "sp1-build",
+ "sp1-sdk",
+]
+
+[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1130,34 +1158,6 @@ name = "fiat-crypto"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
-
-[[package]]
-name = "fibonacci-lib"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "serde",
- "sha2",
-]
-
-[[package]]
-name = "fibonacci-program"
-version = "0.1.0"
-dependencies = [
- "fibonacci-lib",
- "sp1-zkvm",
-]
-
-[[package]]
-name = "fibonacci-script"
-version = "0.1.0"
-dependencies = [
- "clap",
- "dotenv",
- "fibonacci-lib",
- "sp1-build",
- "sp1-sdk",
-]
 
 [[package]]
 name = "find-msvc-tools"

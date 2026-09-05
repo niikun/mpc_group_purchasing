@@ -84,7 +84,7 @@
 
 ## 11. スコープ外(今回は実装しない、設計のみ触れる)
 
-- ZKによるAI入力の出所証明
+- ZKによるAI入力の出所証明 → SP1(zkVM)によるPoCとして一部実装済み(`agent-provenance/`、詳細はspec_v0.4.md §16・`docs/llm_agent_observation.md`§7参照)
 - 計算の正しさ自体のSNARK証明(Verifiable FHE)
 - 発注実績の事後検証・不正入力対策
 - 物流(納品先・納品タイミング)との連携

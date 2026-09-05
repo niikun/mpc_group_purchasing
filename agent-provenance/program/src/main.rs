@@ -1,5 +1,5 @@
-//! A simple program that takes a number `n` as input, and writes the `n-1`th and `n`th fibonacci
-//! number as an output.
+//! profile・salt・公開履歴を witness として受け取り、commitment・history_digest・prompt_hash を
+//! journal(公開出力)にコミットする guest プログラム。
 
 // These two lines are necessary for the program to properly compile.
 //
@@ -8,7 +8,7 @@
 #![no_main]
 sp1_zkvm::entrypoint!(main);
 
-use fibonacci_lib::{commit_profile, format_history, render_prompt, sha256, Profile, RoundResult};
+use agent_provenance_lib::{commit_profile, format_history, render_prompt, sha256, Profile, RoundResult};
 
 pub fn main() {
     // --- private inputs(witness、journal には出ない) ---
@@ -28,6 +28,4 @@ pub fn main() {
     sp1_zkvm::io::commit_slice(&commitment);
     sp1_zkvm::io::commit_slice(&history_digest);
     sp1_zkvm::io::commit_slice(&prompt_hash);
-
-
 }

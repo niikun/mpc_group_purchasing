@@ -1,0 +1,13 @@
+{"version": 2, "width": 80, "height": 24, "timestamp": 1788560518, "env": {"SHELL": "/bin/bash", "TERM": "xterm-256color"}}
+[0.123357, "o", "\u001b[1m\u001b[92m    Finished\u001b[0m `release` profile [optimized] target(s) in 0.11s\r\n"]
+[0.125781, "o", "\u001b[1m\u001b[92m     Running\u001b[0m `target/release/examples/derive`\r\n"]
+[0.906938, "o", "keygen: 774.445183ms\r\n"]
+[0.917661, "o", "encrypt inputs (5社 x 2値): 4.972799ms\r\n"]
+[148.036993, "o", "run 0: whole=147.116306055s  (aggregate=13.089064952s  clearing=10.929808535s  allocate x5=123.097431968s)\r\nsanity: is_trade=true  price=110  demand@clearing=300  supply@clearing=400  (MPC 期待: price=110)\r\n  raw fhe_allocate (参加ゲート未実装, b3 は本来 0): [200, 100, 100, 150, 150]\r\n"]
+[306.35117, "o", "run 1: whole=158.316493265s  (aggregate=32.790031401s  clearing=29.032041931s  allocate x5=96.494419033s)\r\n"]
+[455.988111, "o", "run 2: whole=149.623886528s  (aggregate=23.69526455s  clearing=20.032143028s  allocate x5=105.89647825s)\r\n"]
+[556.012777, "o", "run 3: whole=100.024438223s  (aggregate=19.173356805s  clearing=12.13548725s  allocate x5=68.715593468s)\r\n"]
+[648.163461, "o", "run 4: whole=92.150575239s  (aggregate=14.231309022s  clearing=10.86324838s  allocate x5=67.056017237s)\r\n"]
+[648.163711, "o", "--- FHE 1取引 (buyer3 + seller2) ---\r\n"]
+[648.163761, "o", "threads available: Ok(12)\r\naggregate (D/S 構築, fhe_derive 込み): median=23.69526455s  min=14.231309022s  max=32.790031401s  (n=4)\r\nclearing scan (9 バンド): median=20.032143028s  min=10.86324838s  max=29.032041931s  (n=4)\r\nallocate x5 社: median=96.494419033s  min=67.056017237s  max=105.89647825s  (n=4)"]
+[648.163832, "o", "\r\nwhole trade: median=149.623886528s  min=92.150575239s  max=158.316493265s  (n=4)\r\n"]

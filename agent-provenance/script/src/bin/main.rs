@@ -11,14 +11,14 @@
 //! ```
 
 use clap::Parser;
-use fibonacci_lib::{commit_profile, BuyerProfile, OrderRecord, Profile, RoundResult};
+use agent_provenance_lib::{commit_profile, BuyerProfile, OrderRecord, Profile, RoundResult};
 use sp1_sdk::{
     blocking::{ProveRequest, Prover, ProverClient},
     include_elf, Elf, ProvingKey, SP1Stdin,
 };
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
-const PROVENANCE_ELF: Elf = include_elf!("fibonacci-program");
+const PROVENANCE_ELF: Elf = include_elf!("agent-provenance-program");
 
 
 /// The arguments for the command.
